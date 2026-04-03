@@ -486,6 +486,71 @@ def _score_assessment_payload(
             }
         )
     )
+<<<<<<< HEAD
+=======
+
+    if persist:
+        embedding_service = get_embedding_service()
+        try:
+            embedding_service.embed_score_payload(normalized_gstin, payload)
+            if fraud_result.get("cycle_count", 0) > 0:
+                fraud_doc_id = f"fraud:{normalized_gstin}:{payload['model_inference_at']}"
+                fraud_text = "\n".join(
+                    [
+                        f"GSTIN: {normalized_gstin}",
+                        f"Company: {display_company_name}",
+                        f"Circular Risk: {fraud_result.get('circular_risk')}",
+                        f"Cycle Count: {fraud_result.get('cycle_count')}",
+                        f"Linked MSMEs: {fraud_result.get('linked_msme_count')}",
+                        f"Fraud Ring Members: {', '.join(fraud_result.get('fraud_ring_members', [])) or 'none'}",
+                        f"Cross Entity Fraud Detected: {fraud_result.get('cross_entity_fraud_detected')}",
+                        f"Circular Flow Ratio: {fraud_result.get('circular_flow_ratio')}",
+                        f"Total Volume: {fraud_result.get('total_volume')}",
+                    ]
+                )
+                embedding_service.embed_document(
+                    fraud_doc_id,
+                    fraud_text,
+                    {
+                        "collection": "fraud_patterns",
+                        "doc_type": "fraud_pattern",
+                        "gstin": normalized_gstin,
+                        "company_name": display_company_name,
+                        "circular_risk": fraud_result.get("circular_risk"),
+                        "cycle_count": fraud_result.get("cycle_count"),
+                        "linked_msme_count": fraud_result.get("linked_msme_count"),
+                        "score_freshness": payload["score_freshness"],
+                    },
+                )
+        except Exception:
+            logger.exception("Embedding pipeline failed for GSTIN %s", normalized_gstin)
+        try:
+            get_apriori_service().trigger_refresh_async_if_needed()
+        except Exception:
+            logger.exception("Apriori refresh trigger failed for GSTIN %s", normalized_gstin)
+
+    if include_narrative:
+        try:
+            narrative_result = get_llm_service().generate_narrative(normalized_gstin, payload)
+            payload["narrative"] = narrative_result["narrative"]
+            payload["narrative_text"] = narrative_result["narrative_text"]
+            payload["narrative_sources"] = narrative_result["sources"]
+            payload["sources"] = narrative_result["sources"]
+            payload["narrative_model_used"] = narrative_result["model_used"]
+            if persist:
+                storage.update_assessment_narrative(
+                    gstin=normalized_gstin,
+                    created_at=history_entry_timestamp,
+                    narrative=payload["narrative_text"],
+                )
+        except Exception:
+            logger.exception("Narrative generation failed for GSTIN %s", normalized_gstin)
+            payload["narrative"] = None
+            payload["narrative_text"] = None
+            payload["narrative_sources"] = []
+            payload["narrative_model_used"] = None
+
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     return payload
 
 
@@ -568,6 +633,93 @@ async def score_msme(
     )
 
 
+<<<<<<< HEAD
+=======
+@router.post(
+    "/narrative",
+    summary="Generate an underwriting narrative for the latest GSTIN score",
+)
+@router.post(
+    "/v1/narrative",
+    summary="Generate an underwriting narrative for the latest GSTIN score (v1)",
+)
+async def generate_narrative_endpoint(
+    body: NarrativeRequest,
+    request: Request,
+    _: Any = Depends(require_role("viewer")),
+) -> Dict[str, Any]:
+    payload = _load_latest_payload_for_llm(
+        body.gstin,
+        body.company_name,
+        body.industry_code,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    result = get_llm_service().generate_narrative(payload["gstin"], payload)
+    return {
+        "gstin": payload["gstin"],
+        "narrative": result["narrative"],
+        "narrative_text": result.get("narrative_text"),
+        "sources": result["sources"],
+        "model_used": result["model_used"],
+    }
+
+
+@router.post(
+    "/chat",
+    summary="Ask a chat question about a scored GSTIN",
+)
+@router.post(
+    "/v1/chat",
+    summary="Ask a chat question about a scored GSTIN (v1)",
+)
+async def chat_endpoint(
+    body: ChatRequest,
+    request: Request,
+    _: Any = Depends(require_role("viewer")),
+) -> Dict[str, Any]:
+    payload = _load_latest_payload_for_llm(
+        body.gstin,
+        body.company_name,
+        body.industry_code,
+        request_id=getattr(request.state, "request_id", None),
+    )
+    result = get_llm_service().chat(
+        payload["gstin"],
+        payload,
+        body.message,
+        body.session_id,
+    )
+    return {
+        "gstin": payload["gstin"],
+        "reply": result["reply"],
+        "sources": result["sources"],
+        "session_id": result["session_id"],
+        "sessionId": result["sessionId"],
+        "model_used": result["model_used"],
+    }
+
+
+@router.get(
+    "/insights/rules",
+    summary="Return mined Apriori lending rules",
+)
+@router.get(
+    "/v1/insights/rules",
+    summary="Return mined Apriori lending rules (v1)",
+)
+async def get_mined_rules(
+    force_refresh: bool = Query(False, description="Force recomputation instead of using the 1-hour cache"),
+    _: Any = Depends(require_role("viewer")),
+) -> Dict[str, Any]:
+    service = get_apriori_service()
+    rules = service.get_rules(force_refresh=force_refresh or service.rules_are_stale())
+    return {
+        "rules": rules,
+        "cache": service.get_cache_metadata(),
+    }
+
+
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
 @router.get(
     "/score/{gstin}/history",
     summary="Fetch score history for a GSTIN",

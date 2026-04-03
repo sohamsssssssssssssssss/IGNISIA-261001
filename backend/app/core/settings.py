@@ -70,6 +70,12 @@ class Settings:
     rate_limit_per_minute: int
     pipeline_interval_seconds: int
     pipeline_auto_start: bool
+<<<<<<< HEAD
+=======
+    auto_migrate_database: bool
+    chroma_persist_dir: str
+    embedding_model_name: str
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
 
 
 @lru_cache(maxsize=1)
@@ -105,4 +111,13 @@ def get_settings() -> Settings:
         rate_limit_per_minute=int(os.getenv("RATE_LIMIT_PER_MINUTE", "60")),
         pipeline_interval_seconds=int(os.getenv("PIPELINE_INTERVAL_SECONDS", "900")),
         pipeline_auto_start=_parse_bool(os.getenv("PIPELINE_AUTO_START"), default=True),
+<<<<<<< HEAD
+=======
+        auto_migrate_database=_parse_bool(os.getenv("AUTO_MIGRATE_DATABASE"), default=False),
+        chroma_persist_dir=os.getenv("CHROMA_PERSIST_DIR", str(default_chroma_persist_dir)),
+        embedding_model_name=os.getenv(
+            "EMBEDDING_MODEL_NAME",
+            "sentence-transformers/all-MiniLM-L6-v2",
+        ),
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     )

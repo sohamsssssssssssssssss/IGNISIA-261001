@@ -6,7 +6,10 @@ import { ScoringProgress } from './ScoringProgress';
 import { gstinValidationMessage, normalizeGstin } from './gstin';
 import { DataSourceBanner } from './DataSourceBanner';
 import { ModelMetricsPanel } from './ModelMetricsPanel';
+import { RuntimeStatusBanner } from './RuntimeStatusBanner';
+import ChatPanel from './ChatPanel';
 import NarrativeSummary from './NarrativeSummary';
+import SimilarCasesPanel from './SimilarCasesPanel';
 
 const ShapWaterfall = lazy(() => import('./ShapWaterfall').then(module => ({ default: module.ShapWaterfall })));
 const PipelineSignals = lazy(() => import('./PipelineSignals').then(module => ({ default: module.PipelineSignals })));
@@ -52,6 +55,84 @@ interface MSMEScoringProps {
   showTopbar?: boolean;
 }
 
+function parseNarrativeText(value: string | null | undefined) {
+  const text = (value || '').trim();
+  if (!text) return null;
+  const paragraphs = text.split(/\n\s*\n/).map((item) => item.trim()).filter(Boolean);
+  if (paragraphs.length >= 3) {
+    return {
+      businessOverview: paragraphs[0],
+      keyRiskFactors: paragraphs[1],
+      recommendation: paragraphs[2],
+    };
+  }
+  const sentences = text.split(/(?<=[.!?])\s+/).map((item) => item.trim()).filter(Boolean);
+  if (sentences.length >= 3) {
+    const firstCut = Math.max(1, Math.floor(sentences.length / 3));
+    const secondCut = Math.max(firstCut + 1, Math.floor((2 * sentences.length) / 3));
+    return {
+      businessOverview: sentences.slice(0, firstCut).join(' '),
+      keyRiskFactors: sentences.slice(firstCut, secondCut).join(' '),
+      recommendation: sentences.slice(secondCut).join(' '),
+    };
+  }
+  return {
+    businessOverview: text,
+    keyRiskFactors: '',
+    recommendation: '',
+  };
+}
+
+function normalizeNarrativePayload(result: any) {
+  if (!result) return null;
+  if (result.narrative && typeof result.narrative === 'object') {
+    return {
+      businessOverview: result.narrative.businessOverview ?? result.narrative.business_overview ?? '',
+      keyRiskFactors: result.narrative.keyRiskFactors ?? result.narrative.key_risk_factors ?? '',
+      recommendation: result.narrative.recommendation ?? '',
+    };
+  }
+  return parseNarrativeText(result.narrative_text ?? result.narrative);
+}
+
+function normalizeSourceBundle(result: any) {
+  const sourcePayload = result?.sources ?? result?.narrative_sources;
+  if (!sourcePayload || typeof sourcePayload !== 'object') return null;
+  return {
+    similarCasesCount:
+      sourcePayload.similarCasesCount
+      ?? sourcePayload.similar_cases_count
+      ?? 0,
+    similarCases:
+      sourcePayload.similarCases
+      ?? sourcePayload.similar_cases
+      ?? [],
+    rbiGuidelineSections:
+      sourcePayload.rbiGuidelineSections
+      ?? sourcePayload.rbi_guideline_sections
+      ?? [],
+    rulesApplied:
+      sourcePayload.rulesApplied
+      ?? sourcePayload.rules_applied
+      ?? [],
+    guidelinesReferenced:
+      sourcePayload.guidelinesReferenced
+      ?? sourcePayload.guidelines_referenced
+      ?? [],
+  };
+}
+
+function toSimilarCasesPanelCases(similarCases: Array<any> | undefined) {
+  return (similarCases ?? []).slice(0, 3).map((item, index) => ({
+    id: `${item.gstin || 'case'}-${index}`,
+    gstin: item.gstin ?? 'UNKNOWN',
+    score: Number(item.score ?? 0),
+    riskBand: item.riskBand ?? item.risk_band ?? item.riskBandLabel ?? 'Unknown',
+    outcome: item.outcome ?? 'pending',
+    similarityReason: item.summary ?? 'Similar historical business profile.',
+  }));
+}
+
 export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) => {
   const [gstin, setGstin] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -65,6 +146,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
   const [pinnedResult, setPinnedResult] = useState<any>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [showGraph, setShowGraph] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
 
   useEffect(() => {
     if (!loading) {
@@ -96,6 +178,13 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
       anyRed: statuses.includes('red'),
     };
   }, [result]);
+
+  const narrativePayload = useMemo(() => normalizeNarrativePayload(result), [result]);
+  const sourceBundle = useMemo(() => normalizeSourceBundle(result), [result]);
+  const similarCases = useMemo(
+    () => toSimilarCasesPanelCases(sourceBundle?.similarCases),
+    [sourceBundle],
+  );
 
   const loadScoreArtifacts = async (targetGstin: string, targetCompanyName: string) => {
     const scoreUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}${targetCompanyName ? `?company_name=${encodeURIComponent(targetCompanyName)}` : ''}`;
@@ -148,6 +237,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setSimulation(null);
     setGraphData(null);
     setShowGraph(false);
+    setChatOpen(true);
 
     try {
       const { data, simulationData, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
@@ -178,15 +268,65 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setError(null);
 
     try {
-      const { data, simulationData, graphPayload } = await loadScoreArtifacts(result.gstin, companyName);
-      setResult(data);
-      setSimulation(simulationData);
-      setGraphData(graphPayload);
+      const response = await fetch(`${API_BASE}/api/narrative`, {
+        method: 'POST',
+        headers: buildHeaders(),
+        body: JSON.stringify({
+          gstin: result.gstin,
+          company_name: companyName || undefined,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || `Narrative refresh failed with ${response.status}`);
+      }
+      const payload = await response.json();
+      setResult((current: any) => ({
+        ...current,
+        narrative: payload.narrative,
+        narrative_text: payload.narrative_text,
+        narrative_sources: payload.sources,
+        sources: payload.sources,
+        narrative_model_used: payload.model_used,
+      }));
     } catch (e: any) {
       setError(e.message || 'Failed to refresh narrative');
     } finally {
       setNarrativeRegenerating(false);
     }
+  };
+
+  const handleChatSend = async ({
+    message,
+    sessionId,
+    applicationId,
+  }: {
+    message: string;
+    sessionId: string | null;
+    applicationId: string;
+  }) => {
+    const response = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: buildHeaders(),
+      body: JSON.stringify({
+        gstin: applicationId,
+        message,
+        session_id: sessionId,
+        company_name: companyName || undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || `Chat failed with ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return {
+      reply: payload.reply,
+      sessionId: payload.sessionId ?? payload.session_id,
+      sources: payload.sources,
+    };
   };
 
   const handleReset = () => {
@@ -229,6 +369,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
 
   const content = (
     <div className="msme-container">
+        <RuntimeStatusBanner apiBase={API_BASE} apiToken={API_TOKEN} />
         {/* Search card */}
         <div className="msme-card">
           <div className="msme-card-title">GSTIN Lookup</div>
@@ -337,46 +478,23 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
 
             <NarrativeSummary
               isLoading={loading}
-              narrative={result.narrative ? {
-                businessOverview: result.narrative.businessOverview ?? result.narrative.business_overview ?? '',
-                keyRiskFactors: result.narrative.keyRiskFactors ?? result.narrative.key_risk_factors ?? '',
-                recommendation: result.narrative.recommendation ?? '',
-              } : null}
-              sources={result.sources || result.narrative_sources ? {
-                similarCasesCount:
-                  result.sources?.similarCasesCount
-                  ?? result.sources?.similar_cases_count
-                  ?? result.narrative_sources?.similarCasesCount
-                  ?? result.narrative_sources?.similar_cases_count
-                  ?? 0,
-                similarCases:
-                  result.sources?.similarCases
-                  ?? result.sources?.similar_cases
-                  ?? result.narrative_sources?.similarCases
-                  ?? result.narrative_sources?.similar_cases
-                  ?? [],
-                rbiGuidelineSections:
-                  result.sources?.rbiGuidelineSections
-                  ?? result.sources?.rbi_guideline_sections
-                  ?? result.narrative_sources?.rbiGuidelineSections
-                  ?? result.narrative_sources?.rbi_guideline_sections
-                  ?? [],
-                rulesApplied:
-                  result.sources?.rulesApplied
-                  ?? result.sources?.rules_applied
-                  ?? result.narrative_sources?.rulesApplied
-                  ?? result.narrative_sources?.rules_applied
-                  ?? [],
-                guidelinesReferenced:
-                  result.sources?.guidelinesReferenced
-                  ?? result.sources?.guidelines_referenced
-                  ?? result.narrative_sources?.guidelinesReferenced
-                  ?? result.narrative_sources?.guidelines_referenced
-                  ?? [],
-              } : null}
+              narrative={narrativePayload}
+              sources={sourceBundle}
               onRegenerate={handleNarrativeRegenerate}
               isRegenerating={narrativeRegenerating}
             />
+
+            <div className="msme-grid-2">
+              <SimilarCasesPanel cases={similarCases} isLoading={loading} />
+              <ChatPanel
+                applicationId={result.gstin}
+                applicantName={result.company_name || companyName || result.gstin}
+                creditScore={result.credit_score}
+                onSendMessage={handleChatSend}
+                isOpen={chatOpen}
+                onToggle={() => setChatOpen((current) => !current)}
+              />
+            </div>
 
             {pinnedResult && pinnedResult.gstin !== result.gstin && (
               <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Comparison Mode</div><div className="msme-inline-meta">Loading comparison...</div></div>}>

@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from ..fixtures.demo_config import is_demo_mode
 from ..fixtures.agent_fixtures import MCA_FIXTURES, get_scenario_key
+from .source_utils import enrich_agent_result
 
 
 class MCAAgent:
@@ -23,9 +24,10 @@ class MCAAgent:
         # Live mode — attempt Playwright scrape
         try:
             return self._live_check(company_name)
-        except Exception:
+        except Exception as exc:
             result = self._get_fixture(company_name)
             result["source_status"] = "fallback"
+            result["error_message"] = str(exc)
             return result
 
     def _live_check(self, company_name: str) -> Dict[str, Any]:
@@ -47,11 +49,24 @@ class MCAAgent:
             results["total_din_connections"] = 12
             results["shell_company_risk"] = True
 
-        return results
+        return enrich_agent_result(
+            results,
+            source_name="mca21",
+            source_status="live",
+            source_url="https://www.mca.gov.in/",
+            confidence=0.75,
+            raw_payload={"matched_company": company_name},
+        )
 
     def _get_fixture(self, company_name: str) -> Dict[str, Any]:
         """Return cached fixture data."""
         scenario = get_scenario_key(company_name)
         fixture = MCA_FIXTURES.get(scenario, MCA_FIXTURES["approve"]).copy()
         fixture["company_name"] = company_name
-        return fixture
+        return enrich_agent_result(
+            fixture,
+            source_name="mca21",
+            source_status=fixture.get("source_status", "cached"),
+            source_url="https://www.mca.gov.in/",
+            confidence=0.65,
+        )

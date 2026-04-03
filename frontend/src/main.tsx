@@ -3,11 +3,13 @@ import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from './components/msme/ErrorBoundary';
 import { MSMEScoring } from './components/msme/MSMEScoring';
 import InsightsPage from './pages/InsightsPage';
+import CorporateCamPage from './pages/CorporateCamPage';
 import './msme.css';
 
-type AppRoute = 'scoring' | 'insights';
+type AppRoute = 'scoring' | 'insights' | 'corporate';
 
 function resolveRoute(pathname: string): AppRoute {
+  if (pathname.startsWith('/corporate')) return 'corporate';
   return pathname.startsWith('/insights') ? 'insights' : 'scoring';
 }
 
@@ -46,6 +48,13 @@ function AppShell() {
           </button>
           <button
             type="button"
+            className={`msme-nav__item ${route === 'corporate' ? 'is-active' : ''}`}
+            onClick={() => navigateTo('/corporate')}
+          >
+            Corporate CAM
+          </button>
+          <button
+            type="button"
             className={`msme-nav__item ${route === 'insights' ? 'is-active' : ''}`}
             onClick={() => navigateTo('/insights')}
           >
@@ -56,6 +65,8 @@ function AppShell() {
 
       {route === 'insights' ? (
         <InsightsPage onNavigateToScoring={() => navigateTo('/')} />
+      ) : route === 'corporate' ? (
+        <CorporateCamPage />
       ) : (
         <MSMEScoring showTopbar={false} />
       )}

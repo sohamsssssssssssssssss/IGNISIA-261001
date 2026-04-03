@@ -4,7 +4,7 @@ ORM persistence models for durable score history, fraud alerts, and analyst audi
 
 from __future__ import annotations
 
-from sqlalchemy import Boolean, Float, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -29,6 +29,7 @@ class ScoreAssessmentRecord(Base):
     source: Mapped[str] = mapped_column(String(32), default="api", nullable=False)
     top_reasons_json: Mapped[str] = mapped_column(Text)
     recommendation_json: Mapped[str] = mapped_column(Text)
+    narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class FraudAlertRecord(Base):
@@ -125,3 +126,96 @@ class AnalystReviewRecord(Base):
     field_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[str] = mapped_column(String(64), index=True)
     payload_json: Mapped[str] = mapped_column(Text)
+
+
+class ChatSessionRecord(Base):
+    __tablename__ = "chat_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    gstin: Mapped[str] = mapped_column(String(32), index=True)
+    created_at: Mapped[str] = mapped_column(String(64), index=True)
+    last_active_at: Mapped[str] = mapped_column(String(64), index=True)
+    expires_at: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class ChatMessageRecord(Base):
+    __tablename__ = "chat_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("chat_sessions.session_id"), index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    sources_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class DocumentSessionRecord(Base):
+    __tablename__ = "document_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    created_at: Mapped[str] = mapped_column(String(64), index=True)
+    updated_at: Mapped[str] = mapped_column(String(64), index=True)
+    workflow_status: Mapped[str] = mapped_column(String(32), index=True, default="uploaded")
+    company_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cam_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cam_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class UploadedDocumentRecord(Base):
+    __tablename__ = "uploaded_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("document_sessions.session_id"), index=True)
+    filename: Mapped[str] = mapped_column(String(255), index=True)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    predicted_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence: Mapped[str] = mapped_column(Text, nullable=False)
+    confirmed_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), index=True, default="PENDING")
+    uploaded_at: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class PipelineRunRecord(Base):
+    __tablename__ = "pipeline_runs"
+
+    run_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("document_sessions.session_id"), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    stage: Mapped[str] = mapped_column(String(32), index=True)
+    started_at: Mapped[str] = mapped_column(String(64), index=True)
+    completed_at: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    result_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    chunks_indexed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cam_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cam_file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class PipelineRunEventRecord(Base):
+    __tablename__ = "pipeline_run_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("pipeline_runs.run_id"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("document_sessions.session_id"), index=True)
+    stage: Mapped[str] = mapped_column(String(32), index=True)
+    event_type: Mapped[str] = mapped_column(String(32), index=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class AprioriRuleRecord(Base):
+    __tablename__ = "apriori_rules"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    antecedents_json: Mapped[str] = mapped_column(Text, nullable=False)
+    consequent: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    support: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    lift: Mapped[float] = mapped_column(Float, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(String(64), index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)

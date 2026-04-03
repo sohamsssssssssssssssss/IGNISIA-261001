@@ -14,19 +14,366 @@ from sqlalchemy.engine import make_url
 from .database import init_database, session_scope
 from .persistence_models import (
     AnalystReviewRecord,
+    AprioriRuleRecord,
+    ChatMessageRecord,
+    ChatSessionRecord,
+    DocumentSessionRecord,
     FraudAlertRecord,
     LoanOutcomeRecord,
     ModelVersionRecord,
     MonitoredGSTINRecord,
     PipelineDataRecord,
+    PipelineRunEventRecord,
+    PipelineRunRecord,
     ScoreAssessmentRecord,
+    UploadedDocumentRecord,
 )
 from .settings import get_settings
+
+_UNSET = object()
 
 
 class ScoreStorage:
     def __init__(self) -> None:
         init_database()
+
+    def create_document_session(
+        self,
+        *,
+        session_id: str,
+        created_at: str,
+        updated_at: str,
+        workflow_status: str = "uploaded",
+        metadata: Dict[str, Any] | None = None,
+    ) -> None:
+        with session_scope() as session:
+            existing = session.execute(
+                select(DocumentSessionRecord)
+                .where(DocumentSessionRecord.session_id == session_id)
+                .limit(1)
+            ).scalar_one_or_none()
+            if existing is None:
+                session.add(
+                    DocumentSessionRecord(
+                        session_id=session_id,
+                        created_at=created_at,
+                        updated_at=updated_at,
+                        workflow_status=workflow_status,
+                        metadata_json=json.dumps(metadata or {}),
+                    )
+                )
+                return
+
+            existing.updated_at = updated_at
+            existing.workflow_status = workflow_status
+            existing.metadata_json = json.dumps(metadata or json.loads(existing.metadata_json or "{}"))
+
+    def get_document_session(self, session_id: str) -> Dict[str, Any] | None:
+        with session_scope() as session:
+            row = session.execute(
+                select(
+                    DocumentSessionRecord.session_id,
+                    DocumentSessionRecord.created_at,
+                    DocumentSessionRecord.updated_at,
+                    DocumentSessionRecord.workflow_status,
+                    DocumentSessionRecord.company_name,
+                    DocumentSessionRecord.metadata_json,
+                    DocumentSessionRecord.last_error,
+                    DocumentSessionRecord.cam_filename,
+                    DocumentSessionRecord.cam_file_path,
+                )
+                .where(DocumentSessionRecord.session_id == session_id)
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        return {
+            "session_id": row.session_id,
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
+            "workflow_status": row.workflow_status,
+            "company_name": row.company_name,
+            "metadata": json.loads(row.metadata_json or "{}"),
+            "last_error": row.last_error,
+            "cam_filename": row.cam_filename,
+            "cam_file_path": row.cam_file_path,
+        }
+
+    def update_document_session(
+        self,
+        session_id: str,
+        *,
+        updated_at: str,
+        workflow_status: str | None = None,
+        company_name: str | None = None,
+        metadata: Dict[str, Any] | None = None,
+        last_error: str | None | object = _UNSET,
+        cam_filename: str | None = None,
+        cam_file_path: str | None = None,
+    ) -> bool:
+        with session_scope() as session:
+            record = session.execute(
+                select(DocumentSessionRecord)
+                .where(DocumentSessionRecord.session_id == session_id)
+                .limit(1)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            record.updated_at = updated_at
+            if workflow_status is not None:
+                record.workflow_status = workflow_status
+            if company_name is not None:
+                record.company_name = company_name
+            if metadata is not None:
+                record.metadata_json = json.dumps(metadata)
+            if last_error is not _UNSET:
+                record.last_error = last_error
+            if cam_filename is not None:
+                record.cam_filename = cam_filename
+            if cam_file_path is not None:
+                record.cam_file_path = cam_file_path
+            return True
+
+    def add_uploaded_documents(
+        self,
+        session_id: str,
+        documents: List[Dict[str, Any]],
+    ) -> None:
+        with session_scope() as session:
+            for document in documents:
+                session.add(
+                    UploadedDocumentRecord(
+                        session_id=session_id,
+                        filename=document["filename"],
+                        file_path=document["file_path"],
+                        predicted_type=document["predicted_type"],
+                        confidence=float(document["confidence"]),
+                        evidence=document["evidence"],
+                        confirmed_type=document.get("confirmed_type"),
+                        status=document.get("status", "PENDING"),
+                        uploaded_at=document["uploaded_at"],
+                    )
+                )
+
+    def list_uploaded_documents(self, session_id: str) -> List[Dict[str, Any]]:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    UploadedDocumentRecord.id,
+                    UploadedDocumentRecord.session_id,
+                    UploadedDocumentRecord.filename,
+                    UploadedDocumentRecord.file_path,
+                    UploadedDocumentRecord.predicted_type,
+                    UploadedDocumentRecord.confidence,
+                    UploadedDocumentRecord.evidence,
+                    UploadedDocumentRecord.confirmed_type,
+                    UploadedDocumentRecord.status,
+                    UploadedDocumentRecord.uploaded_at,
+                )
+                .where(UploadedDocumentRecord.session_id == session_id)
+                .order_by(UploadedDocumentRecord.id.asc())
+            ).all()
+        return [
+            {
+                "id": row.id,
+                "session_id": row.session_id,
+                "filename": row.filename,
+                "file_path": row.file_path,
+                "predicted_type": row.predicted_type,
+                "confidence": row.confidence,
+                "evidence": row.evidence,
+                "confirmed_type": row.confirmed_type,
+                "status": row.status,
+                "uploaded_at": row.uploaded_at,
+            }
+            for row in rows
+        ]
+
+    def update_uploaded_document(
+        self,
+        *,
+        session_id: str,
+        filename: str,
+        confirmed_type: str | None = None,
+        status: str | None = None,
+    ) -> bool:
+        with session_scope() as session:
+            record = session.execute(
+                select(UploadedDocumentRecord)
+                .where(UploadedDocumentRecord.session_id == session_id)
+                .where(UploadedDocumentRecord.filename == filename)
+                .order_by(UploadedDocumentRecord.id.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            if confirmed_type is not None:
+                record.confirmed_type = confirmed_type
+            if status is not None:
+                record.status = status
+            return True
+
+    def create_pipeline_run(
+        self,
+        *,
+        run_id: str,
+        session_id: str,
+        status: str,
+        stage: str,
+        started_at: str,
+    ) -> None:
+        with session_scope() as session:
+            session.add(
+                PipelineRunRecord(
+                    run_id=run_id,
+                    session_id=session_id,
+                    status=status,
+                    stage=stage,
+                    started_at=started_at,
+                    result_json="{}",
+                )
+            )
+
+    def add_pipeline_run_event(
+        self,
+        *,
+        run_id: str,
+        session_id: str,
+        stage: str,
+        event_type: str,
+        created_at: str,
+        message: str | None = None,
+        metadata: Dict[str, Any] | None = None,
+    ) -> None:
+        with session_scope() as session:
+            session.add(
+                PipelineRunEventRecord(
+                    run_id=run_id,
+                    session_id=session_id,
+                    stage=stage,
+                    event_type=event_type,
+                    message=message,
+                    metadata_json=json.dumps(metadata or {}),
+                    created_at=created_at,
+                )
+            )
+
+    def list_pipeline_run_events(self, run_id: str) -> List[Dict[str, Any]]:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    PipelineRunEventRecord.id,
+                    PipelineRunEventRecord.run_id,
+                    PipelineRunEventRecord.session_id,
+                    PipelineRunEventRecord.stage,
+                    PipelineRunEventRecord.event_type,
+                    PipelineRunEventRecord.message,
+                    PipelineRunEventRecord.metadata_json,
+                    PipelineRunEventRecord.created_at,
+                )
+                .where(PipelineRunEventRecord.run_id == run_id)
+                .order_by(PipelineRunEventRecord.id.asc())
+            ).all()
+        return [
+            {
+                "id": row.id,
+                "run_id": row.run_id,
+                "session_id": row.session_id,
+                "stage": row.stage,
+                "event_type": row.event_type,
+                "message": row.message,
+                "metadata": json.loads(row.metadata_json or "{}"),
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+
+    def update_pipeline_run(
+        self,
+        run_id: str,
+        *,
+        status: str | None = None,
+        stage: str | None = None,
+        completed_at: str | None = None,
+        error_message: str | None = None,
+        result: Dict[str, Any] | None = None,
+        chunks_indexed: int | None = None,
+        cam_filename: str | None = None,
+        cam_file_path: str | None = None,
+    ) -> bool:
+        with session_scope() as session:
+            record = session.execute(
+                select(PipelineRunRecord)
+                .where(PipelineRunRecord.run_id == run_id)
+                .limit(1)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            if status is not None:
+                record.status = status
+            if stage is not None:
+                record.stage = stage
+            if completed_at is not None:
+                record.completed_at = completed_at
+            if error_message is not None:
+                record.error_message = error_message
+            if result is not None:
+                record.result_json = json.dumps(result)
+            if chunks_indexed is not None:
+                record.chunks_indexed = chunks_indexed
+            if cam_filename is not None:
+                record.cam_filename = cam_filename
+            if cam_file_path is not None:
+                record.cam_file_path = cam_file_path
+            return True
+
+    def get_latest_pipeline_run(self, session_id: str) -> Dict[str, Any] | None:
+        with session_scope() as session:
+            row = session.execute(
+                select(
+                    PipelineRunRecord.run_id,
+                    PipelineRunRecord.session_id,
+                    PipelineRunRecord.status,
+                    PipelineRunRecord.stage,
+                    PipelineRunRecord.started_at,
+                    PipelineRunRecord.completed_at,
+                    PipelineRunRecord.error_message,
+                    PipelineRunRecord.result_json,
+                    PipelineRunRecord.chunks_indexed,
+                    PipelineRunRecord.cam_filename,
+                    PipelineRunRecord.cam_file_path,
+                )
+                .where(PipelineRunRecord.session_id == session_id)
+                .order_by(PipelineRunRecord.started_at.desc())
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        events = self.list_pipeline_run_events(row.run_id)
+        return {
+            "run_id": row.run_id,
+            "session_id": row.session_id,
+            "status": row.status,
+            "stage": row.stage,
+            "started_at": row.started_at,
+            "completed_at": row.completed_at,
+            "error_message": row.error_message,
+            "result": json.loads(row.result_json or "{}"),
+            "chunks_indexed": row.chunks_indexed,
+            "cam_filename": row.cam_filename,
+            "cam_file_path": row.cam_file_path,
+            "events": events,
+        }
+
+    def get_pipeline_session_details(self, session_id: str) -> Dict[str, Any] | None:
+        session_payload = self.get_document_session(session_id)
+        if session_payload is None:
+            return None
+        return {
+            **session_payload,
+            "documents": self.list_uploaded_documents(session_id),
+            "latest_run": self.get_latest_pipeline_run(session_id),
+        }
 
     def record_assessment(
         self,
@@ -45,6 +392,7 @@ class ScoreStorage:
         created_at: str,
         top_reasons: List[Dict[str, Any]],
         recommendation: Dict[str, Any],
+        narrative: str | None = None,
         source: str = "api",
     ) -> None:
         with session_scope() as session:
@@ -65,6 +413,7 @@ class ScoreStorage:
                     source=source,
                     top_reasons_json=json.dumps(top_reasons),
                     recommendation_json=json.dumps(recommendation),
+                    narrative=narrative,
                 )
             )
 
@@ -112,6 +461,7 @@ class ScoreStorage:
                     ScoreAssessmentRecord.source,
                     ScoreAssessmentRecord.model_version,
                     ScoreAssessmentRecord.freshness_timestamp,
+                    ScoreAssessmentRecord.narrative,
                 )
                 .where(ScoreAssessmentRecord.gstin == gstin)
             )
@@ -134,9 +484,23 @@ class ScoreStorage:
                 "source": row.source,
                 "model_version": row.model_version,
                 "data_freshness": row.freshness_timestamp,
+                "narrative": row.narrative,
             }
             for row in rows
         ]
+
+    def update_assessment_narrative(self, *, gstin: str, created_at: str, narrative: str | None) -> bool:
+        with session_scope() as session:
+            record = session.execute(
+                select(ScoreAssessmentRecord)
+                .where(ScoreAssessmentRecord.gstin == gstin)
+                .where(ScoreAssessmentRecord.created_at == created_at)
+                .limit(1)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            record.narrative = narrative
+            return True
 
     def get_assessment_count(self, gstin: str) -> int:
         with session_scope() as session:
@@ -146,6 +510,89 @@ class ScoreStorage:
             count = session.scalar(stmt)
         return int(count or 0)
 
+<<<<<<< HEAD
+=======
+    def count_assessments(self) -> int:
+        with session_scope() as session:
+            count = session.scalar(select(func.count()).select_from(ScoreAssessmentRecord))
+        return int(count or 0)
+
+    def get_latest_assessment_details(self, gstin: str) -> Dict[str, Any] | None:
+        with session_scope() as session:
+            row = session.execute(
+                select(
+                    ScoreAssessmentRecord.gstin,
+                    ScoreAssessmentRecord.company_name,
+                    ScoreAssessmentRecord.credit_score,
+                    ScoreAssessmentRecord.risk_band,
+                    ScoreAssessmentRecord.fraud_risk,
+                    ScoreAssessmentRecord.model_version,
+                    ScoreAssessmentRecord.industry_code,
+                    ScoreAssessmentRecord.months_active,
+                    ScoreAssessmentRecord.scenario,
+                    ScoreAssessmentRecord.data_sparse,
+                    ScoreAssessmentRecord.freshness_timestamp,
+                    ScoreAssessmentRecord.created_at,
+                    ScoreAssessmentRecord.top_reasons_json,
+                    ScoreAssessmentRecord.recommendation_json,
+                    ScoreAssessmentRecord.narrative,
+                )
+                .where(ScoreAssessmentRecord.gstin == gstin)
+                .order_by(ScoreAssessmentRecord.created_at.desc())
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        return {
+            "gstin": row.gstin,
+            "company_name": row.company_name,
+            "credit_score": row.credit_score,
+            "risk_band": row.risk_band,
+            "fraud_risk": row.fraud_risk,
+            "model_version": row.model_version,
+            "industry_code": row.industry_code,
+            "months_active": row.months_active,
+            "scenario": row.scenario,
+            "data_sparse": row.data_sparse,
+            "freshness_timestamp": row.freshness_timestamp,
+            "created_at": row.created_at,
+            "top_reasons": json.loads(row.top_reasons_json),
+            "recommendation": json.loads(row.recommendation_json),
+            "narrative": row.narrative,
+        }
+
+    def get_latest_fraud_alert(self, gstin: str) -> Dict[str, Any] | None:
+        with session_scope() as session:
+            row = session.execute(
+                select(
+                    FraudAlertRecord.gstin,
+                    FraudAlertRecord.company_name,
+                    FraudAlertRecord.circular_risk,
+                    FraudAlertRecord.risk_score,
+                    FraudAlertRecord.cycle_count,
+                    FraudAlertRecord.linked_msme_count,
+                    FraudAlertRecord.total_volume,
+                    FraudAlertRecord.created_at,
+                    FraudAlertRecord.alert_payload_json,
+                )
+                .where(FraudAlertRecord.gstin == gstin)
+                .order_by(FraudAlertRecord.created_at.desc())
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        payload = json.loads(row.alert_payload_json)
+        payload.setdefault("gstin", row.gstin)
+        payload.setdefault("company_name", row.company_name)
+        payload.setdefault("circular_risk", row.circular_risk)
+        payload.setdefault("risk_score", row.risk_score)
+        payload.setdefault("cycle_count", row.cycle_count)
+        payload.setdefault("linked_msme_count", row.linked_msme_count)
+        payload.setdefault("total_volume", row.total_volume)
+        payload.setdefault("created_at", row.created_at)
+        return payload
+
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     def get_segment_score_percentile(
         self,
         *,
@@ -313,6 +760,236 @@ class ScoreStorage:
             for row in rows
         ]
 
+<<<<<<< HEAD
+=======
+    def get_latest_loan_outcomes_by_gstins(self, gstins: List[str]) -> Dict[str, Dict[str, Any]]:
+        normalized = [gstin for gstin in gstins if gstin]
+        if not normalized:
+            return {}
+
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    LoanOutcomeRecord.gstin,
+                    LoanOutcomeRecord.company_name,
+                    LoanOutcomeRecord.repaid,
+                    LoanOutcomeRecord.loan_amount,
+                    LoanOutcomeRecord.tenure_months,
+                    LoanOutcomeRecord.recorded_at,
+                    LoanOutcomeRecord.source_model_version,
+                    LoanOutcomeRecord.feature_snapshot_json,
+                )
+                .where(LoanOutcomeRecord.gstin.in_(normalized))
+                .order_by(LoanOutcomeRecord.gstin.asc(), LoanOutcomeRecord.recorded_at.desc())
+            ).all()
+
+        latest_by_gstin: Dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if row.gstin in latest_by_gstin:
+                continue
+            latest_by_gstin[row.gstin] = {
+                "gstin": row.gstin,
+                "company_name": row.company_name,
+                "repaid": row.repaid,
+                "loan_amount": row.loan_amount,
+                "tenure_months": row.tenure_months,
+                "recorded_at": row.recorded_at,
+                "source_model_version": row.source_model_version,
+                "feature_snapshot": json.loads(row.feature_snapshot_json),
+            }
+        return latest_by_gstin
+
+    def create_chat_session(
+        self,
+        *,
+        session_id: str,
+        gstin: str,
+        created_at: str,
+        last_active_at: str,
+        expires_at: str,
+    ) -> None:
+        with session_scope() as session:
+            session.add(
+                ChatSessionRecord(
+                    session_id=session_id,
+                    gstin=gstin,
+                    created_at=created_at,
+                    last_active_at=last_active_at,
+                    expires_at=expires_at,
+                )
+            )
+
+    def get_chat_session(self, session_id: str) -> Dict[str, Any] | None:
+        with session_scope() as session:
+            row = session.execute(
+                select(
+                    ChatSessionRecord.session_id,
+                    ChatSessionRecord.gstin,
+                    ChatSessionRecord.created_at,
+                    ChatSessionRecord.last_active_at,
+                    ChatSessionRecord.expires_at,
+                )
+                .where(ChatSessionRecord.session_id == session_id)
+                .limit(1)
+            ).first()
+        if row is None:
+            return None
+        return {
+            "session_id": row.session_id,
+            "gstin": row.gstin,
+            "created_at": row.created_at,
+            "last_active_at": row.last_active_at,
+            "expires_at": row.expires_at,
+        }
+
+    def touch_chat_session(self, *, session_id: str, last_active_at: str, expires_at: str) -> bool:
+        with session_scope() as session:
+            record = session.execute(
+                select(ChatSessionRecord)
+                .where(ChatSessionRecord.session_id == session_id)
+                .limit(1)
+            ).scalar_one_or_none()
+            if record is None:
+                return False
+            record.last_active_at = last_active_at
+            record.expires_at = expires_at
+            return True
+
+    def append_chat_message(
+        self,
+        *,
+        session_id: str,
+        role: str,
+        content: str,
+        sources: List[Dict[str, Any]] | None,
+        created_at: str,
+    ) -> None:
+        with session_scope() as session:
+            session.add(
+                ChatMessageRecord(
+                    session_id=session_id,
+                    role=role,
+                    content=content,
+                    sources_json=json.dumps(sources or []),
+                    created_at=created_at,
+                )
+            )
+
+    def get_chat_history(self, session_id: str) -> List[Dict[str, Any]]:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    ChatMessageRecord.role,
+                    ChatMessageRecord.content,
+                    ChatMessageRecord.sources_json,
+                    ChatMessageRecord.created_at,
+                )
+                .where(ChatMessageRecord.session_id == session_id)
+                .order_by(ChatMessageRecord.created_at.asc(), ChatMessageRecord.id.asc())
+            ).all()
+        return [
+            {
+                "role": row.role,
+                "content": row.content,
+                "sources": json.loads(row.sources_json),
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+
+    def cleanup_expired_chat_sessions(self, *, now_iso: str) -> int:
+        with session_scope() as session:
+            expired_ids = session.execute(
+                select(ChatSessionRecord.session_id).where(ChatSessionRecord.expires_at < now_iso)
+            ).scalars().all()
+            if not expired_ids:
+                return 0
+            session.query(ChatMessageRecord).filter(ChatMessageRecord.session_id.in_(expired_ids)).delete(
+                synchronize_session=False
+            )
+            session.query(ChatSessionRecord).filter(ChatSessionRecord.session_id.in_(expired_ids)).delete(
+                synchronize_session=False
+            )
+            return len(expired_ids)
+
+    def replace_apriori_rules(self, rules: List[Dict[str, Any]], *, created_at: str) -> None:
+        with session_scope() as session:
+            session.query(AprioriRuleRecord).filter(AprioriRuleRecord.is_active.is_(True)).update(
+                {"is_active": False},
+                synchronize_session=False,
+            )
+            for rule in rules:
+                existing = session.execute(
+                    select(AprioriRuleRecord)
+                    .where(AprioriRuleRecord.id == rule["rule_id"])
+                    .limit(1)
+                ).scalar_one_or_none()
+                if existing is None:
+                    session.add(
+                        AprioriRuleRecord(
+                            id=rule["rule_id"],
+                            antecedents_json=json.dumps(rule["antecedents"]),
+                            consequent=rule["consequent"],
+                            support=rule["support"],
+                            confidence=rule["confidence"],
+                            lift=rule["lift"],
+                            explanation=rule["explanation"],
+                            created_at=created_at,
+                            is_active=True,
+                        )
+                    )
+                else:
+                    existing.antecedents_json = json.dumps(rule["antecedents"])
+                    existing.consequent = rule["consequent"]
+                    existing.support = rule["support"]
+                    existing.confidence = rule["confidence"]
+                    existing.lift = rule["lift"]
+                    existing.explanation = rule["explanation"]
+                    existing.created_at = created_at
+                    existing.is_active = True
+
+    def get_active_apriori_rules(self) -> List[Dict[str, Any]]:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    AprioriRuleRecord.id,
+                    AprioriRuleRecord.antecedents_json,
+                    AprioriRuleRecord.consequent,
+                    AprioriRuleRecord.support,
+                    AprioriRuleRecord.confidence,
+                    AprioriRuleRecord.lift,
+                    AprioriRuleRecord.explanation,
+                    AprioriRuleRecord.created_at,
+                )
+                .where(AprioriRuleRecord.is_active.is_(True))
+                .order_by(
+                    AprioriRuleRecord.confidence.desc(),
+                    AprioriRuleRecord.lift.desc(),
+                    AprioriRuleRecord.support.desc(),
+                )
+            ).all()
+        return [
+            {
+                "rule_id": row.id,
+                "antecedents": json.loads(row.antecedents_json),
+                "consequent": row.consequent,
+                "support": row.support,
+                "confidence": row.confidence,
+                "lift": row.lift,
+                "explanation": row.explanation,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+
+    def get_latest_apriori_rule_created_at(self) -> str | None:
+        with session_scope() as session:
+            value = session.execute(
+                select(func.max(AprioriRuleRecord.created_at)).where(AprioriRuleRecord.is_active.is_(True))
+            ).scalar()
+        return value
+
+>>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     def record_model_version(
         self,
         *,
@@ -496,6 +1173,11 @@ class ScoreStorage:
             reviews = session.scalar(select(func.count()).select_from(AnalystReviewRecord)) or 0
             outcomes = session.scalar(select(func.count()).select_from(LoanOutcomeRecord)) or 0
             versions = session.scalar(select(func.count()).select_from(ModelVersionRecord)) or 0
+            chat_sessions = session.scalar(select(func.count()).select_from(ChatSessionRecord)) or 0
+            chat_messages = session.scalar(select(func.count()).select_from(ChatMessageRecord)) or 0
+            apriori_rules = session.scalar(
+                select(func.count()).select_from(AprioriRuleRecord).where(AprioriRuleRecord.is_active.is_(True))
+            ) or 0
 
         return {
             "database_url": safe_url,
@@ -506,6 +1188,9 @@ class ScoreStorage:
             "analyst_reviews": int(reviews),
             "loan_outcomes": int(outcomes),
             "model_versions": int(versions),
+            "chat_sessions": int(chat_sessions),
+            "chat_messages": int(chat_messages),
+            "active_apriori_rules": int(apriori_rules),
         }
 
 

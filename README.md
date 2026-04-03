@@ -103,7 +103,11 @@ flowchart LR
 ### Document Pipeline
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/upload` | Upload 1–5 documents (auto-classifies) |
+| `POST` | `/api/upload` | Upload 1–5 documents into a persisted session (auto-classifies) |
+| `POST` | `/api/upload/confirm` | Persist analyst-confirmed document types for a session |
+| `GET` | `/api/pipeline/{session_id}` | Return persisted workflow state, latest run, and stage timeline |
+| `POST` | `/api/pipeline/run` | Execute the corporate CAM workflow for a confirmed session |
+| `GET` | `/api/download/{filename}` | Download generated CAM DOCX output |
 | `POST` | `/api/classify` | Classify a single document |
 | `POST` | `/api/classify/batch` | Batch document classification |
 | `POST` | `/api/dd_notes` | Submit due diligence notes |
@@ -112,7 +116,17 @@ flowchart LR
 ### Health & Operations
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Model backend, fallback status, version, evaluation metrics |
+| `GET` | `/health` | Model backend, fallback status, version, evaluation metrics, and RAG runtime mode (`disabled` / `reduced` / `full`) |
+
+## Active Frontend Routes
+
+The shipped Vite frontend currently mounts three routes:
+
+| Route | Purpose |
+|------|---------|
+| `/` | MSME GSTIN scoring dashboard |
+| `/insights` | Apriori / portfolio insights page |
+| `/corporate` | Persisted corporate CAM workflow: upload, classification review, execution timeline, and CAM download |
 
 ## Getting Started
 
@@ -154,7 +168,7 @@ cd backend
 source venv/bin/activate
 pip install -r requirements-dev.txt
 cd ..
-pytest tests/test_msme_scoring_api.py
+pytest tests/test_msme_scoring_api.py tests/test_upload_pipeline.py tests/test_rag_runtime.py
 ```
 
 **Frontend tests:**
@@ -180,9 +194,33 @@ npm test
 | `REQUIRE_AUTH` | Enable API key authentication | `false` |
 | `API_TOKENS` | Role-based token pairs (viewer/analyst/admin) | — |
 | `RATE_LIMIT_PER_MINUTE` | Request rate limit threshold | `60` |
+| `ENABLE_RAG` | Enable the corporate RAG workflow at all | `true` |
+| `ENABLE_LOCAL_GENERATION` | Enable local generation enrichments (Ollama) | `true` |
+| `ENABLE_WEB_INTEL` | Enable Tavily-backed web intelligence | `true` |
+| `AUTO_MIGRATE_DATABASE` | Run `alembic upgrade head` automatically on backend startup | `false` |
 | `MODEL_ARTIFACT_DIR` | XGBoost model artifact storage path | `backend/models/` |
 | `VITE_API_BASE_URL` | Frontend API endpoint | `http://localhost:8000` |
 | `VITE_API_TOKEN` | Frontend bearer token | — |
+
+## Corporate RAG Runtime Modes
+
+The corporate CAM workflow now reports and surfaces its runtime mode through `/health` and the frontend banner:
+
+| Mode | Meaning |
+|------|---------|
+| `full` | Retrieval, local generation, and web intelligence are all available |
+| `reduced` | Base retrieval works, but generation and/or web intelligence is degraded |
+| `disabled` | Base retrieval/indexing runtime is unavailable, so CAM execution is blocked |
+
+## Agent Source Status
+
+The agent status API now returns normalized source metadata for MCA, eCourts, RBI watchlist, and news adapters, including:
+- `source_name`
+- `source_status`
+- `source_url`
+- `retrieved_at`
+- `confidence`
+- `error_message`
 
 ## Model Operations
 
@@ -243,9 +281,10 @@ The platform ships with three demo GSTINs to showcase the system's discriminatio
 │   └── scripts/                 # Model training, load testing
 ├── frontend/
 │   └── src/
-│       ├── App.tsx              # Main app shell with WebSocket pipeline
-│       ├── components/          # Dashboard, UploadForm, PromoterGraph (D3)
-│       └── components/msme/     # MSME scoring UI (ScoreHero, ShapWaterfall, FraudDetection, etc.)
+│       ├── main.tsx             # Active app shell and route mounting
+│       ├── pages/               # Insights page + persisted corporate CAM page
+│       ├── components/          # Legacy prototype UI
+│       └── components/msme/     # Active MSME scoring UI + shared runtime banners
 ├── tests/                       # Backend regression tests
 ├── .github/workflows/ci.yml    # GitHub Actions CI
 ├── docker-compose.yml           # Full-stack deployment

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 
-type RiskBand = 'Low' | 'Moderate' | 'High' | 'Very High';
-type Outcome = 'Repaid' | 'Defaulted' | 'Pending';
+type RiskBand = string;
+type Outcome = string;
 
 export interface SimilarCase {
   id: string;
@@ -21,25 +21,25 @@ const DEMO_CASES: SimilarCase[] = [
   {
     id: 'case-1',
     gstin: '27AABCU9603R1ZM',
-    score: 74,
-    riskBand: 'Moderate',
-    outcome: 'Repaid',
+    score: 742,
+    riskBand: 'LOW_RISK',
+    outcome: 'repaid',
     similarityReason: 'Similar GST filing rate and business age',
   },
   {
     id: 'case-2',
     gstin: '29GGGGG1314R9Z6',
-    score: 68,
-    riskBand: 'High',
-    outcome: 'Defaulted',
+    score: 618,
+    riskBand: 'MODERATE_RISK',
+    outcome: 'defaulted',
     similarityReason: 'Comparable revenue volatility and sector exposure',
   },
   {
     id: 'case-3',
     gstin: '33AAACH7409R1Z5',
-    score: 71,
-    riskBand: 'High',
-    outcome: 'Defaulted',
+    score: 571,
+    riskBand: 'HIGH_RISK',
+    outcome: 'defaulted',
     similarityReason: 'Matched loan-to-turnover ratio and collateral profile',
   },
 ];
@@ -49,20 +49,26 @@ function truncateGstin(gstin: string): string {
 }
 
 function scoreColor(score: number): string {
-  if (score >= 75) return '#10b981';
-  if (score >= 55) return '#f59e0b';
+  if (score >= 800) return '#10b981';
+  if (score >= 700) return '#34d399';
+  if (score >= 600) return '#f59e0b';
   return '#ef4444';
 }
 
 function riskBandColor(riskBand: RiskBand): string {
-  switch (riskBand) {
-    case 'Low':
+  switch (riskBand.replace(/[\s_]+/g, '').toLowerCase()) {
+    case 'low':
+    case 'lowrisk':
+    case 'verylowrisk':
       return '#10b981';
-    case 'Moderate':
+    case 'moderate':
+    case 'moderaterisk':
       return '#f59e0b';
-    case 'High':
+    case 'high':
+    case 'highrisk':
       return '#ef4444';
-    case 'Very High':
+    case 'veryhigh':
+    case 'veryhighrisk':
       return '#b91c1c';
     default:
       return '#9ca3af';
@@ -70,12 +76,12 @@ function riskBandColor(riskBand: RiskBand): string {
 }
 
 function outcomeColor(outcome: Outcome): string {
-  switch (outcome) {
-    case 'Repaid':
+  switch (outcome.toLowerCase()) {
+    case 'repaid':
       return '#10b981';
-    case 'Defaulted':
+    case 'defaulted':
       return '#ef4444';
-    case 'Pending':
+    case 'pending':
       return '#9ca3af';
     default:
       return '#9ca3af';
@@ -85,9 +91,9 @@ function outcomeColor(outcome: Outcome): string {
 function ScoreRing({ score }: { score: number }) {
   const radius = 18;
   const circumference = 2 * Math.PI * radius;
-  const normalized = Math.max(0, Math.min(100, score));
+  const normalized = Math.max(0, Math.min(100, ((score - 300) / 600) * 100));
   const offset = circumference - (normalized / 100) * circumference;
-  const color = scoreColor(normalized);
+  const color = scoreColor(score);
 
   return (
     <div
@@ -135,10 +141,26 @@ function ScoreRing({ score }: { score: number }) {
           transform: 'translate(-50%, -50%)',
         }}
       >
-        {normalized}
+        {Math.round(score)}
       </span>
     </div>
   );
+}
+
+function formatRiskBand(riskBand: RiskBand): string {
+  const normalized = riskBand.replace(/_/g, ' ').toLowerCase().trim();
+  if (!normalized) return 'Unknown';
+  return normalized
+    .split(' ')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatOutcome(outcome: Outcome): string {
+  const normalized = outcome.toLowerCase();
+  if (normalized === 'repaid') return 'Repaid';
+  if (normalized === 'defaulted') return 'Defaulted';
+  return 'Pending';
 }
 
 function StatusPill({
@@ -252,8 +274,8 @@ export default function SimilarCasesPanel({
   const resolvedCases = useMemo(() => (cases && cases.length ? cases.slice(0, 3) : DEMO_CASES), [cases]);
 
   const summary = useMemo(() => {
-    const defaulted = resolvedCases.filter((item) => item.outcome === 'Defaulted').length;
-    const repaid = resolvedCases.filter((item) => item.outcome === 'Repaid').length;
+    const defaulted = resolvedCases.filter((item) => item.outcome.toLowerCase() === 'defaulted').length;
+    const repaid = resolvedCases.filter((item) => item.outcome.toLowerCase() === 'repaid').length;
     return {
       defaulted,
       repaid,
@@ -545,8 +567,8 @@ export default function SimilarCasesPanel({
                 </div>
 
                 <div className="similar-cases-card__pill-row">
-                  <StatusPill label={item.riskBand} color={riskBandColor(item.riskBand)} />
-                  <StatusPill label={item.outcome} color={outcomeColor(item.outcome)} glow />
+                  <StatusPill label={formatRiskBand(item.riskBand)} color={riskBandColor(item.riskBand)} />
+                  <StatusPill label={formatOutcome(item.outcome)} color={outcomeColor(item.outcome)} glow />
                 </div>
 
                 <div className="similar-cases-card__divider" />

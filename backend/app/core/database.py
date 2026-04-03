@@ -70,18 +70,32 @@ def init_database() -> None:
     """
     from .persistence_models import (
         AnalystReviewRecord,
+        AprioriRuleRecord,
+        ChatMessageRecord,
+        ChatSessionRecord,
+        DocumentSessionRecord,
         FraudAlertRecord,
         LoanOutcomeRecord,
         ModelVersionRecord,
         MonitoredGSTINRecord,
         PipelineDataRecord,
+        PipelineRunEventRecord,
+        PipelineRunRecord,
         ScoreAssessmentRecord,
+        UploadedDocumentRecord,
     )
 
     _ = (
         ScoreAssessmentRecord,
         FraudAlertRecord,
         AnalystReviewRecord,
+        ChatSessionRecord,
+        ChatMessageRecord,
+        DocumentSessionRecord,
+        UploadedDocumentRecord,
+        PipelineRunRecord,
+        PipelineRunEventRecord,
+        AprioriRuleRecord,
         PipelineDataRecord,
         MonitoredGSTINRecord,
         LoanOutcomeRecord,

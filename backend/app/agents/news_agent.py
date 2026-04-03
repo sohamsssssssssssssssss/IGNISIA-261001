@@ -2,6 +2,7 @@ import os
 from typing import Dict, Any
 from ..fixtures.demo_config import is_demo_mode
 from ..fixtures.agent_fixtures import NEWS_FIXTURES, get_scenario_key
+from .source_utils import enrich_agent_result
 
 
 class NewsAgent:
@@ -17,11 +18,22 @@ class NewsAgent:
         if is_demo_mode():
             return self._get_fixture(entity_name)
 
+        if not self.api_key:
+            return enrich_agent_result(
+                self._get_fixture(entity_name),
+                source_name="tavily_news",
+                source_status="unavailable",
+                source_url="https://app.tavily.com/",
+                confidence=0.0,
+                error_message="TAVILY_API_KEY is not configured",
+            )
+
         try:
             return self._live_check(entity_name)
-        except Exception:
+        except Exception as exc:
             result = self._get_fixture(entity_name)
             result["source_status"] = "fallback"
+            result["error_message"] = str(exc)
             return result
 
     def _live_check(self, entity_name: str) -> Dict[str, Any]:
@@ -44,15 +56,27 @@ class NewsAgent:
 
         score = max(-1.0, 1.0 - (negative_hits * 0.5))
 
-        return {
+        return enrich_agent_result({
             "entity": entity_name,
             "sentiment_score": score,
             "negative_news_flag": score < 0,
-            "source_status": "live",
-        }
+            "articles": response.get("results", []),
+        },
+            source_name="tavily_news",
+            source_status="live",
+            source_url="https://app.tavily.com/",
+            confidence=0.7,
+            raw_payload=response,
+        )
 
     def _get_fixture(self, entity_name: str) -> Dict[str, Any]:
         scenario = get_scenario_key(entity_name)
         fixture = NEWS_FIXTURES.get(scenario, NEWS_FIXTURES["approve"]).copy()
         fixture["entity"] = entity_name
-        return fixture
+        return enrich_agent_result(
+            fixture,
+            source_name="tavily_news",
+            source_status=fixture.get("source_status", "cached"),
+            source_url="https://app.tavily.com/",
+            confidence=0.6,
+        )

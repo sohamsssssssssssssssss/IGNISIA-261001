@@ -3,6 +3,7 @@ from ..fixtures.demo_config import is_demo_mode
 from ..fixtures.agent_fixtures import (
     LITIGATION_FIXTURES, RBI_WATCHLIST_FIXTURES, get_scenario_key
 )
+from .source_utils import enrich_agent_result
 
 
 class LitigationAgent:
@@ -17,9 +18,10 @@ class LitigationAgent:
 
         try:
             return self._live_check(entity_name)
-        except Exception:
+        except Exception as exc:
             result = self._get_fixture(entity_name)
             result["source_status"] = "fallback"
+            result["error_message"] = str(exc)
             return result
 
     def _live_check(self, entity_name: str) -> Dict[str, Any]:
@@ -30,20 +32,30 @@ class LitigationAgent:
             active_litigation = 1
             drt_cases = 1
 
-        return {
+        return enrich_agent_result({
             "entity": entity_name,
             "active_cases": active_litigation,
             "drt_cases": drt_cases,
             "disputed_amount": 4_500_000 if drt_cases > 0 else 0,
             "drts_flag": drt_cases > 0,
-            "source_status": "live",
-        }
+        },
+            source_name="ecourts",
+            source_status="live",
+            source_url="https://services.ecourts.gov.in/",
+            confidence=0.7,
+        )
 
     def _get_fixture(self, entity_name: str) -> Dict[str, Any]:
         scenario = get_scenario_key(entity_name)
         fixture = LITIGATION_FIXTURES.get(scenario, LITIGATION_FIXTURES["approve"]).copy()
         fixture["entity"] = entity_name
-        return fixture
+        return enrich_agent_result(
+            fixture,
+            source_name="ecourts",
+            source_status=fixture.get("source_status", "cached"),
+            source_url="https://services.ecourts.gov.in/",
+            confidence=0.65,
+        )
 
 
 class RBIWatchlistAgent:
@@ -58,23 +70,34 @@ class RBIWatchlistAgent:
 
         try:
             return self._live_check(promoters)
-        except Exception:
+        except Exception as exc:
             result = self._get_fixture(promoters)
             result["source_status"] = "fallback"
+            result["error_message"] = str(exc)
             return result
 
     def _live_check(self, promoters: list) -> Dict[str, Any]:
         watchlist = ["FRAUDSTER INC", "SCAMMER PVT LTD"]
         on_watchlist = any(p.upper() in watchlist for p in promoters)
-        return {
+        return enrich_agent_result({
             "on_watchlist": on_watchlist,
             "checked_promoters": promoters,
-            "source_status": "live",
-        }
+        },
+            source_name="rbi_wilful_defaulters",
+            source_status="live",
+            source_url="https://www.rbi.org.in/",
+            confidence=0.6,
+        )
 
     def _get_fixture(self, promoters: list) -> Dict[str, Any]:
         # Use first promoter name to determine scenario
         key = get_scenario_key(promoters[0] if promoters else "")
         fixture = RBI_WATCHLIST_FIXTURES.get(key, RBI_WATCHLIST_FIXTURES["approve"]).copy()
         fixture["checked_promoters"] = promoters
-        return fixture
+        return enrich_agent_result(
+            fixture,
+            source_name="rbi_wilful_defaulters",
+            source_status=fixture.get("source_status", "cached"),
+            source_url="https://www.rbi.org.in/",
+            confidence=0.6,
+        )
