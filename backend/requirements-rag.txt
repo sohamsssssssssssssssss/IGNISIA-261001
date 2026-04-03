@@ -1,0 +1,10 @@
+# Optional: RAG / LLM pipeline for full Corporate Credit Appraisal
+# These are NOT needed for the MSME scoring API.
+# Install with: pip install -r requirements-rag.txt
+-r requirements.txt
+chromadb==1.0.11
+llama-index-core==0.12.39
+llama-index-vector-stores-chroma==0.4.2
+llama-index-embeddings-huggingface==0.5.4
+ollama==0.5.1
+tavily-python==0.7.22
