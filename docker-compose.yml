@@ -1,0 +1,84 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intellicredit-postgres
+    environment:
+      POSTGRES_DB: intellicredit
+      POSTGRES_USER: intellicredit
+      POSTGRES_PASSWORD: intellicredit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: intellicredit-backend
+    environment:
+      APP_ENV: production
+      DEMO_MODE: "true"
+      REQUIRE_AUTH: "true"
+      API_TOKENS: viewer:demo-viewer-token,analyst:demo-analyst-token,admin:demo-admin-token
+      ENABLE_RATE_LIMIT: "true"
+      RATE_LIMIT_PER_MINUTE: 120
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+      DATABASE_URL: postgresql+psycopg2://intellicredit:intellicredit@postgres:5432/intellicredit
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:8000
+        VITE_API_TOKEN: demo-analyst-token
+    container_name: intellicredit-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: intellicredit-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: intellicredit-minio
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_data:
+  redis_data:
+  minio_data:
