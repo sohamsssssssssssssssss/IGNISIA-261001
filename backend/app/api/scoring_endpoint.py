@@ -31,6 +31,9 @@ from ..core.xgboost_model import (
 from ..services.feature_engineering import build_feature_vector
 from ..services.graph_serializer import serialize_graph
 from ..services.simulator import run_simulation
+from ..services.embedding_service import get_embedding_service
+from ..services.apriori_service import get_apriori_service
+from ..services.llm_service import get_llm_service
 from ..core.scheduler import refresh_gstin_now, refresh_pipeline_stream, trigger_immediate_ingestion
 from ..services.upi_fraud_detection import UPIFraudDetector
 from ..utils.audit import AuditTrail
@@ -58,6 +61,20 @@ class LoanOutcomePayload(BaseModel):
 
 class ModelRetrainRequest(BaseModel):
     outcomes: list[LoanOutcomePayload] = []
+
+
+class NarrativeRequest(BaseModel):
+    gstin: str
+    company_name: Optional[str] = None
+    industry_code: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    gstin: str
+    message: str
+    session_id: Optional[str] = None
+    company_name: Optional[str] = None
+    industry_code: Optional[str] = None
 
 
 FRESH_MAX_MINUTES = 30
@@ -220,6 +237,7 @@ def _score_assessment_payload(
     *,
     request_id: Optional[str] = None,
     persist: bool = True,
+    include_narrative: bool = True,
 ) -> Dict[str, Any]:
     settings = get_settings()
     started_at = datetime.now(timezone.utc)
@@ -547,6 +565,23 @@ def _score_assessment_payload(
             payload["narrative_sources"] = []
             payload["narrative_model_used"] = None
     return payload
+
+
+def _load_latest_payload_for_llm(
+    gstin: str,
+    company_name: Optional[str] = None,
+    industry_code: Optional[str] = None,
+    *,
+    request_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    return _score_assessment_payload(
+        gstin,
+        company_name,
+        industry_code,
+        request_id=request_id,
+        persist=False,
+        include_narrative=False,
+    )
 
 
 def _render_docx(payload: Dict[str, Any]) -> BytesIO:
