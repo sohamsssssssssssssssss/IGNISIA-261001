@@ -6,6 +6,7 @@ import { ScoringProgress } from './ScoringProgress';
 import { gstinValidationMessage, normalizeGstin } from './gstin';
 import { DataSourceBanner } from './DataSourceBanner';
 import { ModelMetricsPanel } from './ModelMetricsPanel';
+import NarrativeSummary from './NarrativeSummary';
 
 const ShapWaterfall = lazy(() => import('./ShapWaterfall').then(module => ({ default: module.ShapWaterfall })));
 const PipelineSignals = lazy(() => import('./PipelineSignals').then(module => ({ default: module.PipelineSignals })));
@@ -47,7 +48,11 @@ const DEMO_GSTINS = [
   { gstin: '09NEWCO1234A1Z9', label: 'Sparse Data', company: 'New Startup' },
 ];
 
-export const MSMEScoring: React.FC = () => {
+interface MSMEScoringProps {
+  showTopbar?: boolean;
+}
+
+export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) => {
   const [gstin, setGstin] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -56,6 +61,7 @@ export const MSMEScoring: React.FC = () => {
   const [simulation, setSimulation] = useState<any>(null);
   const [graphData, setGraphData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [narrativeRegenerating, setNarrativeRegenerating] = useState(false);
   const [pinnedResult, setPinnedResult] = useState<any>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [showGraph, setShowGraph] = useState(false);
@@ -91,9 +97,46 @@ export const MSMEScoring: React.FC = () => {
     };
   }, [result]);
 
-  const handleScore = async (gstinOverride?: string) => {
+  const loadScoreArtifacts = async (targetGstin: string, targetCompanyName: string) => {
+    const scoreUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}${targetCompanyName ? `?company_name=${encodeURIComponent(targetCompanyName)}` : ''}`;
+    const scoreResp = await fetch(scoreUrl, { method: 'POST', headers: buildHeaders() });
+
+    if (!scoreResp.ok) {
+      const body = await scoreResp.json().catch(() => ({}));
+      throw new Error(body.detail || `API returned ${scoreResp.status}`);
+    }
+
+    const data = await scoreResp.json();
+
+    const simulationUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}/simulate${targetCompanyName ? `?company_name=${encodeURIComponent(targetCompanyName)}` : ''}`;
+    let simulationData = null;
+    try {
+      const simulationResp = await fetch(simulationUrl, { headers: buildHeaders() });
+      if (simulationResp.ok) {
+        simulationData = await simulationResp.json();
+      }
+    } catch (simulationError) {
+      console.warn('Simulation fetch failed', simulationError);
+    }
+
+    const graphUrl = `${API_BASE}/api/v1/entity-graph/${encodeURIComponent(targetGstin)}`;
+    let graphPayload = null;
+    try {
+      const graphResp = await fetch(graphUrl, { headers: buildHeaders() });
+      if (graphResp.ok) {
+        graphPayload = await graphResp.json();
+      }
+    } catch (graphError) {
+      console.warn('Entity graph fetch failed', graphError);
+    }
+
+    return { data, simulationData, graphPayload };
+  };
+
+  const handleScore = async (gstinOverride?: string, companyNameOverride?: string) => {
     const targetGstin = normalizeGstin(gstinOverride || gstin);
     const targetError = gstinValidationMessage(targetGstin);
+    const targetCompanyName = companyNameOverride ?? companyName;
     if (targetError) {
       setError(targetError);
       return;
@@ -107,39 +150,17 @@ export const MSMEScoring: React.FC = () => {
     setShowGraph(false);
 
     try {
-      const url = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}${companyName ? `?company_name=${encodeURIComponent(companyName)}` : ''}`;
-      const resp = await fetch(url, { method: 'POST', headers: buildHeaders() });
-
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error(body.detail || `API returned ${resp.status}`);
-      }
-
-      const data = await resp.json();
+      const { data, simulationData, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
       setResult(data);
-
-      const simulationUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}/simulate${companyName ? `?company_name=${encodeURIComponent(companyName)}` : ''}`;
-      try {
-        const simulationResp = await fetch(simulationUrl, { headers: buildHeaders() });
-        if (simulationResp.ok) {
-          setSimulation(await simulationResp.json());
-        }
-      } catch (simulationError) {
-        console.warn('Simulation fetch failed', simulationError);
-      }
-
-      const graphUrl = `${API_BASE}/api/v1/entity-graph/${encodeURIComponent(targetGstin)}`;
-      try {
-        const graphResp = await fetch(graphUrl, { headers: buildHeaders() });
-        if (graphResp.ok) {
-          setGraphData(await graphResp.json());
-        }
-      } catch (graphError) {
-        console.warn('Entity graph fetch failed', graphError);
-      }
+      setSimulation(simulationData);
+      setGraphData(graphPayload);
 
       if (gstinOverride) {
         setGstin(gstinOverride);
+      }
+      if (companyNameOverride !== undefined) {
+        setCompanyName(companyNameOverride);
+      } else if (gstinOverride) {
         const demo = DEMO_GSTINS.find(d => d.gstin === gstinOverride);
         if (demo) setCompanyName(demo.company);
       }
@@ -147,6 +168,24 @@ export const MSMEScoring: React.FC = () => {
       setError(e.message || 'Failed to connect to scoring API');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNarrativeRegenerate = async () => {
+    if (!result?.gstin) return;
+
+    setNarrativeRegenerating(true);
+    setError(null);
+
+    try {
+      const { data, simulationData, graphPayload } = await loadScoreArtifacts(result.gstin, companyName);
+      setResult(data);
+      setSimulation(simulationData);
+      setGraphData(graphPayload);
+    } catch (e: any) {
+      setError(e.message || 'Failed to refresh narrative');
+    } finally {
+      setNarrativeRegenerating(false);
     }
   };
 
@@ -188,17 +227,8 @@ export const MSMEScoring: React.FC = () => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  return (
-    <div className="msme-app">
-      {/* Top bar */}
-      <div className="msme-topbar">
-        <div className="msme-wordmark">INTELLI-CREDIT <span>MSME Scoring Engine</span></div>
-        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '1.5px', opacity: 0.6 }}>
-          v1.0 — REAL-TIME ASSESSMENT
-        </div>
-      </div>
-
-      <div className="msme-container">
+  const content = (
+    <div className="msme-container">
         {/* Search card */}
         <div className="msme-card">
           <div className="msme-card-title">GSTIN Lookup</div>
@@ -254,7 +284,7 @@ export const MSMEScoring: React.FC = () => {
               <button
                 key={d.gstin}
                 className="msme-demo-btn"
-                onClick={() => { setGstin(d.gstin); setCompanyName(d.company); handleScore(d.gstin); }}
+                onClick={() => { setGstin(d.gstin); setCompanyName(d.company); handleScore(d.gstin, d.company); }}
                 disabled={loading}
               >
                 {d.label} <code>{d.gstin.slice(0, 8)}...</code>
@@ -303,6 +333,49 @@ export const MSMEScoring: React.FC = () => {
               gstin={result.gstin}
               modelVersion={result.model_version}
               topReason={result.top_reasons?.[0] || null}
+            />
+
+            <NarrativeSummary
+              isLoading={loading}
+              narrative={result.narrative ? {
+                businessOverview: result.narrative.businessOverview ?? result.narrative.business_overview ?? '',
+                keyRiskFactors: result.narrative.keyRiskFactors ?? result.narrative.key_risk_factors ?? '',
+                recommendation: result.narrative.recommendation ?? '',
+              } : null}
+              sources={result.sources || result.narrative_sources ? {
+                similarCasesCount:
+                  result.sources?.similarCasesCount
+                  ?? result.sources?.similar_cases_count
+                  ?? result.narrative_sources?.similarCasesCount
+                  ?? result.narrative_sources?.similar_cases_count
+                  ?? 0,
+                similarCases:
+                  result.sources?.similarCases
+                  ?? result.sources?.similar_cases
+                  ?? result.narrative_sources?.similarCases
+                  ?? result.narrative_sources?.similar_cases
+                  ?? [],
+                rbiGuidelineSections:
+                  result.sources?.rbiGuidelineSections
+                  ?? result.sources?.rbi_guideline_sections
+                  ?? result.narrative_sources?.rbiGuidelineSections
+                  ?? result.narrative_sources?.rbi_guideline_sections
+                  ?? [],
+                rulesApplied:
+                  result.sources?.rulesApplied
+                  ?? result.sources?.rules_applied
+                  ?? result.narrative_sources?.rulesApplied
+                  ?? result.narrative_sources?.rules_applied
+                  ?? [],
+                guidelinesReferenced:
+                  result.sources?.guidelinesReferenced
+                  ?? result.sources?.guidelines_referenced
+                  ?? result.narrative_sources?.guidelinesReferenced
+                  ?? result.narrative_sources?.guidelines_referenced
+                  ?? [],
+              } : null}
+              onRegenerate={handleNarrativeRegenerate}
+              isRegenerating={narrativeRegenerating}
             />
 
             {pinnedResult && pinnedResult.gstin !== result.gstin && (
@@ -385,7 +458,12 @@ export const MSMEScoring: React.FC = () => {
 
             {showGraph && graphData && (
               <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Entity Network Graph</div><div className="msme-inline-meta">Loading interactive graph...</div></div>}>
-                <EntityGraph gstin={result.gstin} graphData={graphData} />
+                <EntityGraph
+                  gstin={result.gstin}
+                  graphData={graphData}
+                  fraudScore={result.fraud_detection?.risk_score ?? 0}
+                  fraudExplanation={result.fraud_explanation}
+                />
               </Suspense>
             )}
           </div>
@@ -400,6 +478,21 @@ export const MSMEScoring: React.FC = () => {
           </div>
         )}
       </div>
+  );
+
+  if (!showTopbar) {
+    return content;
+  }
+
+  return (
+    <div className="msme-app">
+      <div className="msme-topbar">
+        <div className="msme-wordmark">INTELLI-CREDIT <span>MSME Scoring Engine</span></div>
+        <div style={{ fontFamily: 'var(--mono)', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '1.5px', opacity: 0.6 }}>
+          v1.0 — REAL-TIME ASSESSMENT
+        </div>
+      </div>
+      {content}
     </div>
   );
 };

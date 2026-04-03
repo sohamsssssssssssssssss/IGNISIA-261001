@@ -1,0 +1,364 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:opsz@6..40&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+.root {
+  --ns-bg: #fdfaf6;
+  --ns-bg-dark: #1a1814;
+  --ns-border-accent: #c47d1e;
+  --ns-border-accent-dark: #e8a83a;
+  --ns-text-primary: #1c1917;
+  --ns-text-body: #3d3530;
+  --ns-text-muted: #9c8f82;
+  --ns-rule: #e8e0d5;
+  --ns-chip-case-bg: #f0ebe3;
+  --ns-chip-case-text: #6b5e52;
+  --ns-chip-rbi-bg: #eaf0f6;
+  --ns-chip-rbi-text: #3b5a7a;
+  --ns-skeleton-base: #ede8e2;
+  --ns-skeleton-highlight: #f5f0ea;
+  background: var(--ns-bg);
+  border-left: 3px solid var(--ns-border-accent);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(180, 120, 40, 0.08);
+  color: var(--ns-text-primary);
+  opacity: 1;
+  transform: translateY(0);
+}
+
+:global(.dark) .root {
+  --ns-bg: var(--ns-bg-dark);
+  --ns-border-accent: var(--ns-border-accent-dark);
+  --ns-text-primary: #f5ede2;
+  --ns-text-body: #d9c8b8;
+  --ns-text-muted: #b59e8a;
+  --ns-rule: rgba(232, 224, 213, 0.16);
+  --ns-chip-case-bg: rgba(240, 235, 227, 0.1);
+  --ns-chip-case-text: #d4c0aa;
+  --ns-chip-rbi-bg: rgba(59, 90, 122, 0.2);
+  --ns-chip-rbi-text: #b7cee5;
+  --ns-skeleton-base: rgba(237, 232, 226, 0.12);
+  --ns-skeleton-highlight: rgba(245, 240, 234, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .root {
+    --ns-bg: var(--ns-bg-dark);
+    --ns-border-accent: var(--ns-border-accent-dark);
+    --ns-text-primary: #f5ede2;
+    --ns-text-body: #d9c8b8;
+    --ns-text-muted: #b59e8a;
+    --ns-rule: rgba(232, 224, 213, 0.16);
+    --ns-chip-case-bg: rgba(240, 235, 227, 0.1);
+    --ns-chip-case-text: #d4c0aa;
+    --ns-chip-rbi-bg: rgba(59, 90, 122, 0.2);
+    --ns-chip-rbi-text: #b7cee5;
+    --ns-skeleton-base: rgba(237, 232, 226, 0.12);
+    --ns-skeleton-highlight: rgba(245, 240, 234, 0.2);
+  }
+}
+
+.headingFont {
+  font-family: 'DM Serif Display', Georgia, serif;
+}
+
+.bodyFont {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.cardPadding {
+  padding: 28px 32px;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headingText {
+  color: var(--ns-text-primary);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sourcesRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skeletonBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mt4 {
+  margin-top: 16px;
+}
+
+.mt5 {
+  margin-top: 20px;
+}
+
+.mt6 {
+  margin-top: 24px;
+}
+
+.skeletonHeading {
+  height: 20px;
+  width: 160px;
+}
+
+.skeletonButton {
+  height: 34px;
+  width: 118px;
+}
+
+.skeletonLabel {
+  height: 10px;
+  width: 80px;
+}
+
+.skeletonLine95 {
+  height: 14px;
+  width: 95%;
+}
+
+.skeletonLine88 {
+  height: 14px;
+  width: 88%;
+}
+
+.skeletonLine92 {
+  height: 14px;
+  width: 92%;
+}
+
+.skeletonLine70 {
+  height: 14px;
+  width: 70%;
+}
+
+.skeletonSourceWide {
+  height: 28px;
+  width: 140px;
+}
+
+.skeletonSourceCase {
+  height: 28px;
+  width: 120px;
+}
+
+.skeletonSourceShort {
+  height: 28px;
+  width: 90px;
+}
+
+.skeletonSourceMid {
+  height: 28px;
+  width: 108px;
+}
+
+.rule {
+  border-top: 1px solid var(--ns-rule);
+}
+
+.entered {
+  animation: narrative-enter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.textRefreshing {
+  opacity: 0.6;
+  transition: opacity 180ms ease;
+}
+
+.label {
+  color: var(--ns-text-muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.paragraph {
+  color: var(--ns-text-body);
+  font-size: 0.9rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.cursor {
+  display: inline-block;
+  margin-left: 1px;
+  color: var(--ns-border-accent);
+  animation: narrative-cursor 0.7s infinite;
+}
+
+.spin {
+  animation: narrative-spin 0.8s linear infinite;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 6px 10px;
+}
+
+.caseChip {
+  background: var(--ns-chip-case-bg);
+  color: var(--ns-chip-case-text);
+}
+
+.rbiChip {
+  background: var(--ns-chip-rbi-bg);
+  color: var(--ns-chip-rbi-text);
+}
+
+.skeletonBar,
+.skeletonPill {
+  background: linear-gradient(
+    90deg,
+    var(--ns-skeleton-base) 25%,
+    var(--ns-skeleton-highlight) 50%,
+    var(--ns-skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.skeletonBar {
+  border-radius: 6px;
+}
+
+.skeletonPill {
+  border-radius: 999px;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ns-text-body);
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.listItem + .listItem {
+  margin-top: 0.2rem;
+}
+
+.button {
+  border: 1px solid var(--ns-border-accent);
+  color: var(--ns-border-accent);
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease,
+    opacity 160ms ease;
+}
+
+.button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ns-border-accent) 10%, transparent);
+  transform: scale(1.02);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .cardPadding {
+    padding: 28px;
+  }
+
+  .headerRow,
+  .skeletonHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@supports not (background: color-mix(in srgb, white 50%, black)) {
+  .button:hover:not(:disabled) {
+    background: rgba(196, 125, 30, 0.1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes narrative-cursor {
+  0%,
+  100% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes narrative-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes narrative-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

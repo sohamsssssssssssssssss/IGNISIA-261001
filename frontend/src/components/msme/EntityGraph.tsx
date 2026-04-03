@@ -5,6 +5,23 @@ import fcose from 'cytoscape-fcose';
 cytoscape.use(fcose);
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+const DEMO_FRAUD_EXPLANATION = `
+GST filing records reveal a triangular invoice loop connecting the applicant
+entity to two shell-like intermediaries registered within the past 18 months.
+Funds appear to cycle back to the applicant within 45 days with no
+corresponding e-way bill activity, suggesting fabricated inter-party
+transactions.
+
+This pattern is consistent with invoice inflation designed to artificially
+boost reported turnover. If accepted at face value, the applicant's declared
+annual revenue would overstate true business activity by an estimated 30-40%,
+materially affecting the loan-to-income ratio used in credit decisioning.
+
+The compliance officer should immediately request original e-way bills for
+the flagged transaction period and cross-reference with counterparty GST-3B
+filings. If discrepancies exceed 15% of declared turnover, escalate to the
+fraud review queue and place the application on hold pending investigation.
+`.trim();
 
 const CY_STYLE = [
   {
@@ -128,6 +145,112 @@ interface EntityGraphPayload {
 interface EntityGraphProps {
   gstin: string;
   graphData?: EntityGraphPayload | null;
+  fraudScore?: number;
+  fraudExplanation?: string;
+}
+
+function FraudExplanationBox({
+  explanation,
+  fraudScore,
+}: {
+  explanation: string;
+  fraudScore: number;
+}) {
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;600&family=DM+Sans:ital,wght@0,400;0,500;1,400&family=Sora:wght@600;700&display=swap');
+
+        @keyframes fraudBoxFadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+      <div
+        style={{
+          animation: 'fraudBoxFadeIn 0.45s ease forwards',
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.30)',
+          borderLeft: '3px solid #f59e0b',
+          borderRadius: 10,
+          marginTop: 20,
+          padding: '16px 18px',
+        }}
+      >
+        <div style={{ alignItems: 'center', display: 'flex', gap: 10 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M8 2.1 14 13H2L8 2.1Z"
+              fill="none"
+              stroke="#f59e0b"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+            <path d="M8 5.3v4.1" stroke="#f59e0b" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="8" cy="11.6" r="0.85" fill="#f59e0b" />
+          </svg>
+          <div
+            style={{
+              color: '#f59e0b',
+              fontFamily: "'Sora', sans-serif",
+              fontSize: 12,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Fraud Risk Analysis
+          </div>
+          <span
+            style={{
+              background: 'rgba(245,158,11,0.15)',
+              border: '1px solid rgba(245,158,11,0.3)',
+              borderRadius: 999,
+              color: '#f59e0b',
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 11,
+              marginLeft: 'auto',
+              padding: '2px 10px',
+            }}
+          >
+            Score: {fraudScore}
+          </span>
+        </div>
+
+        <div style={{ background: 'rgba(245,158,11,0.15)', height: 1, margin: '12px 0' }} />
+
+        <p
+          style={{
+            color: 'rgba(234, 179, 8, 0.90)',
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: 13,
+            lineHeight: 1.7,
+            margin: 0,
+            whiteSpace: 'pre-wrap',
+          }}
+        >
+          {explanation}
+        </p>
+
+        <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 14 }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.25" fill="none" stroke="rgba(245,158,11,0.5)" strokeWidth="1.2" />
+            <path d="M6 3.4v2.9l1.8 1.1" fill="none" stroke="rgba(245,158,11,0.5)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span
+            style={{
+              color: 'rgba(245,158,11,0.45)',
+              fontFamily: "'DM Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.04em',
+            }}
+          >
+            Generated at score time · not real-time
+          </span>
+        </div>
+      </div>
+    </>
+  );
 }
 
 const NodeDetailPanel: React.FC<{ node: cytoscape.NodeSingular | null; onClose: () => void }> = ({ node, onClose }) => {
@@ -181,7 +304,7 @@ const NodeDetailPanel: React.FC<{ node: cytoscape.NodeSingular | null; onClose: 
   );
 };
 
-export const EntityGraph: React.FC<EntityGraphProps> = ({ gstin, graphData }) => {
+export const EntityGraph: React.FC<EntityGraphProps> = ({ gstin, graphData, fraudScore = 0, fraudExplanation }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -190,6 +313,12 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ gstin, graphData }) =>
   const [loading, setLoading] = useState(!graphData);
   const [error, setError] = useState<string | null>(null);
   const [cycleAnimActive, setCycleAnimActive] = useState(false);
+  const resolvedFraudExplanation = (() => {
+    const trimmed = fraudExplanation?.trim();
+    if (trimmed) return trimmed;
+    const isDevelopment = (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development') || import.meta.env.DEV;
+    return isDevelopment ? DEMO_FRAUD_EXPLANATION : '';
+  })();
 
   useEffect(() => {
     if (graphData) {
@@ -365,6 +494,12 @@ export const EntityGraph: React.FC<EntityGraphProps> = ({ gstin, graphData }) =>
           <span style={{ color: '#475569' }}>● Connected entity</span>
           <span>Drag to pan · Scroll to zoom · Click node for details</span>
         </div>
+      ) : null}
+      {fraudScore > 40 && resolvedFraudExplanation.trim().length > 0 ? (
+        <FraudExplanationBox
+          explanation={resolvedFraudExplanation}
+          fraudScore={fraudScore}
+        />
       ) : null}
     </div>
   );
