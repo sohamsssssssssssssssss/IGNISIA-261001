@@ -510,8 +510,6 @@ class ScoreStorage:
             count = session.scalar(stmt)
         return int(count or 0)
 
-<<<<<<< HEAD
-=======
     def count_assessments(self) -> int:
         with session_scope() as session:
             count = session.scalar(select(func.count()).select_from(ScoreAssessmentRecord))
@@ -591,8 +589,6 @@ class ScoreStorage:
         payload.setdefault("total_volume", row.total_volume)
         payload.setdefault("created_at", row.created_at)
         return payload
-
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     def get_segment_score_percentile(
         self,
         *,
@@ -760,8 +756,6 @@ class ScoreStorage:
             for row in rows
         ]
 
-<<<<<<< HEAD
-=======
     def get_latest_loan_outcomes_by_gstins(self, gstins: List[str]) -> Dict[str, Dict[str, Any]]:
         normalized = [gstin for gstin in gstins if gstin]
         if not normalized:
@@ -988,8 +982,6 @@ class ScoreStorage:
                 select(func.max(AprioriRuleRecord.created_at)).where(AprioriRuleRecord.is_active.is_(True))
             ).scalar()
         return value
-
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     def record_model_version(
         self,
         *,

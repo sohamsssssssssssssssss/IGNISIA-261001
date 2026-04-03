@@ -70,12 +70,9 @@ class Settings:
     rate_limit_per_minute: int
     pipeline_interval_seconds: int
     pipeline_auto_start: bool
-<<<<<<< HEAD
-=======
     auto_migrate_database: bool
     chroma_persist_dir: str
     embedding_model_name: str
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
 
 
 @lru_cache(maxsize=1)
@@ -83,6 +80,7 @@ def get_settings() -> Settings:
     backend_root = Path(__file__).resolve().parents[2]
     default_db = backend_root / "data" / "intellicredit.db"
     default_model_artifact_dir = backend_root / "artifacts"
+    default_chroma_persist_dir = backend_root / "data" / "chroma_db"
     database_path = os.getenv("DATABASE_PATH", str(default_db))
     database_url = os.getenv("DATABASE_URL", f"sqlite:///{database_path}")
     app_env = os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "development"
@@ -111,13 +109,10 @@ def get_settings() -> Settings:
         rate_limit_per_minute=int(os.getenv("RATE_LIMIT_PER_MINUTE", "60")),
         pipeline_interval_seconds=int(os.getenv("PIPELINE_INTERVAL_SECONDS", "900")),
         pipeline_auto_start=_parse_bool(os.getenv("PIPELINE_AUTO_START"), default=True),
-<<<<<<< HEAD
-=======
         auto_migrate_database=_parse_bool(os.getenv("AUTO_MIGRATE_DATABASE"), default=False),
         chroma_persist_dir=os.getenv("CHROMA_PERSIST_DIR", str(default_chroma_persist_dir)),
         embedding_model_name=os.getenv(
             "EMBEDDING_MODEL_NAME",
             "sentence-transformers/all-MiniLM-L6-v2",
         ),
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     )

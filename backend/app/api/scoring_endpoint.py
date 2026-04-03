@@ -486,9 +486,6 @@ def _score_assessment_payload(
             }
         )
     )
-<<<<<<< HEAD
-=======
-
     if persist:
         embedding_service = get_embedding_service()
         try:
@@ -549,8 +546,6 @@ def _score_assessment_payload(
             payload["narrative_text"] = None
             payload["narrative_sources"] = []
             payload["narrative_model_used"] = None
-
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     return payload
 
 
@@ -633,8 +628,6 @@ async def score_msme(
     )
 
 
-<<<<<<< HEAD
-=======
 @router.post(
     "/narrative",
     summary="Generate an underwriting narrative for the latest GSTIN score",
@@ -717,9 +710,6 @@ async def get_mined_rules(
         "rules": rules,
         "cache": service.get_cache_metadata(),
     }
-
-
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
 @router.get(
     "/score/{gstin}/history",
     summary="Fetch score history for a GSTIN",

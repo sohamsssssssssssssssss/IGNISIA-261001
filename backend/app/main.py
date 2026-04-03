@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,7 @@ from app.api.upload_endpoint import router as upload_router
 from app.api.agent_status_endpoint import router as agent_status_router
 from app.api.scoring_endpoint import router as scoring_router
 from app.core.entity_graph import get_entity_graph_service
+from app.core.chroma_client import ensure_chroma_collections
 from app.core.migrations import run_database_migrations
 from app.core.middleware import (
     RateLimitMiddleware,
@@ -20,15 +22,16 @@ from app.core.settings import get_settings
 from app.core.storage import get_storage
 from app.core.xgboost_model import get_scorer
 from app.fixtures.demo_config import is_demo_mode
+from app.services.embedding_service import get_embedding_service
+from app.services.retrieval_service import get_retrieval_service
 
 settings = get_settings()
+logger = logging.getLogger("intellicredit.startup")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: seed demo GSTINs and start background pipeline workers
-<<<<<<< HEAD
-=======
     if settings.auto_migrate_database:
         run_database_migrations()
     ensure_chroma_collections()
@@ -36,7 +39,6 @@ async def lifespan(app: FastAPI):
     logger.info("Static embedding bootstrap complete: %s", static_embedding_status)
     retrieval_seed_status = get_retrieval_service().seed_synthetic_history_if_empty(min_cases=100)
     logger.info("Retrieval history bootstrap complete: %s", retrieval_seed_status)
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
     seed_demo_gstins()
     start_scheduler()
     yield

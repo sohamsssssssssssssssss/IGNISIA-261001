@@ -394,8 +394,6 @@ def _map_probability_to_score(probability: float) -> int:
     return max(300, min(900, raw_score))
 
 
-<<<<<<< HEAD
-=======
 def _synthetic_business_count() -> int:
     configured = int(os.getenv("MSME_SYNTHETIC_BUSINESSES", "1200"))
     floor = 60 if os.getenv("MSME_FAST_BOOTSTRAP") == "1" else 200
@@ -412,9 +410,6 @@ def _mlp_max_epochs() -> int:
     configured = int(os.getenv("MSME_MLP_MAX_EPOCHS", "80"))
     floor = 3 if os.getenv("MSME_FAST_BOOTSTRAP") == "1" else 10
     return max(floor, configured)
-
-
->>>>>>> 05df2af (Harden RAG workflow and ship corporate CAM route)
 def _build_calibration_curve(y_true: np.ndarray, raw_probs: np.ndarray, calibrated_probs: np.ndarray) -> list[Dict[str, float]]:
     bins = np.linspace(0.0, 1.0, 11)
     points: list[Dict[str, float]] = []
