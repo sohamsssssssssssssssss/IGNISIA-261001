@@ -14,6 +14,20 @@ from app.core.xgboost_model import get_scorer, recommend_loan, reset_scorer
 from app.services.feature_engineering import POPULATION_DEFAULTS, _confidence_weight
 
 
+def _reset_service_caches():
+    from app.core.chroma_client import reset_chroma_client
+    from app.core.session_store import get_session_store
+    from app.services.embedding_service import get_embedding_service
+    from app.services.llm_service import get_llm_service
+    from app.services.retrieval_service import get_retrieval_service
+
+    reset_chroma_client()
+    get_session_store.cache_clear()
+    get_embedding_service.cache_clear()
+    get_retrieval_service.cache_clear()
+    get_llm_service.cache_clear()
+
+
 def _reset_scheduler():
     from app.core import scheduler as sched_mod
     sched_mod.stop_scheduler()
@@ -50,6 +64,7 @@ def client(tmp_path, monkeypatch):
     storage_module._storage = None
     reset_database_runtime()
     reset_scorer()
+    _reset_service_caches()
     _reset_scheduler()
     _reset_entity_graph()
 
@@ -66,6 +81,7 @@ def client(tmp_path, monkeypatch):
     storage_module._storage = None
     reset_database_runtime()
     reset_scorer()
+    _reset_service_caches()
 
 
 @pytest.fixture()
@@ -85,6 +101,7 @@ def secured_client(tmp_path, monkeypatch):
     storage_module._storage = None
     reset_database_runtime()
     reset_scorer()
+    _reset_service_caches()
     _reset_scheduler()
     _reset_entity_graph()
 
@@ -101,6 +118,7 @@ def secured_client(tmp_path, monkeypatch):
     storage_module._storage = None
     reset_database_runtime()
     reset_scorer()
+    _reset_service_caches()
 
 
 def test_score_endpoint_returns_expected_contract(client):

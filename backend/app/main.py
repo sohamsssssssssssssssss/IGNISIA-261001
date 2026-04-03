@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     # Startup: seed demo GSTINs and start background pipeline workers
     if settings.auto_migrate_database:
         run_database_migrations()
+    get_storage()
     ensure_chroma_collections()
     static_embedding_status = get_embedding_service().bootstrap_static_documents()
     logger.info("Static embedding bootstrap complete: %s", static_embedding_status)
