@@ -66,7 +66,8 @@ class LLMService:
         narrative_sections = self._structure_narrative(response_text)
         sources = self._build_sources(similar_cases, rules)
         return {
-            "narrative": narrative_sections,
+            "narrative": response_text,
+            "narrative_sections": narrative_sections,
             "narrative_text": response_text,
             "sources": sources,
             "model_used": model_used,

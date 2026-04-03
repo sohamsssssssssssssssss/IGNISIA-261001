@@ -529,7 +529,7 @@ def _score_assessment_payload(
     if include_narrative:
         try:
             narrative_result = get_llm_service().generate_narrative(normalized_gstin, payload)
-            payload["narrative"] = narrative_result["narrative"]
+            payload["narrative"] = narrative_result.get("narrative_sections") or narrative_result["narrative"]
             payload["narrative_text"] = narrative_result["narrative_text"]
             payload["narrative_sources"] = narrative_result["sources"]
             payload["sources"] = narrative_result["sources"]
@@ -650,7 +650,7 @@ async def generate_narrative_endpoint(
     result = get_llm_service().generate_narrative(payload["gstin"], payload)
     return {
         "gstin": payload["gstin"],
-        "narrative": result["narrative"],
+        "narrative": result.get("narrative_sections") or result["narrative"],
         "narrative_text": result.get("narrative_text"),
         "sources": result["sources"],
         "model_used": result["model_used"],
