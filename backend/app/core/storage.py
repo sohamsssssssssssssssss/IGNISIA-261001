@@ -37,6 +37,8 @@ class ScoreStorage:
         risk_band: str,
         fraud_risk: str,
         model_version: str,
+        industry_code: str | None,
+        months_active: float,
         scenario: str,
         data_sparse: bool,
         freshness_timestamp: str,
@@ -54,6 +56,8 @@ class ScoreStorage:
                     risk_band=risk_band,
                     fraud_risk=fraud_risk,
                     model_version=model_version,
+                    industry_code=industry_code,
+                    months_active=months_active,
                     scenario=scenario,
                     data_sparse=data_sparse,
                     freshness_timestamp=freshness_timestamp,
@@ -97,7 +101,6 @@ class ScoreStorage:
         gstin: str,
         limit: int = 20,
         offset: int = 0,
-        include_seed: bool = False,
     ) -> List[Dict[str, Any]]:
         with session_scope() as session:
             stmt = (
@@ -112,8 +115,6 @@ class ScoreStorage:
                 )
                 .where(ScoreAssessmentRecord.gstin == gstin)
             )
-            if not include_seed:
-                stmt = stmt.where(ScoreAssessmentRecord.source != "seed")
             latest = (
                 session.execute(
                     stmt.order_by(ScoreAssessmentRecord.created_at.desc())
@@ -137,15 +138,79 @@ class ScoreStorage:
             for row in rows
         ]
 
-    def get_assessment_count(self, gstin: str, include_seed: bool = True) -> int:
+    def get_assessment_count(self, gstin: str) -> int:
         with session_scope() as session:
             stmt = select(func.count()).select_from(ScoreAssessmentRecord).where(
                 ScoreAssessmentRecord.gstin == gstin
             )
-            if not include_seed:
-                stmt = stmt.where(ScoreAssessmentRecord.source != "seed")
             count = session.scalar(stmt)
         return int(count or 0)
+
+    def get_segment_score_percentile(
+        self,
+        *,
+        credit_score: int,
+        months_active: float,
+        industry_code: str | None,
+    ) -> Dict[str, Any]:
+        normalized_industry = "".join(ch for ch in (industry_code or "") if ch.isdigit())[:2] or None
+        if months_active < 6:
+            age_band = "UNDER_6_MONTHS"
+        elif months_active < 12:
+            age_band = "MONTHS_6_TO_12"
+        elif months_active < 24:
+            age_band = "MONTHS_12_TO_24"
+        else:
+            age_band = "OVER_24_MONTHS"
+
+        def _age_band_filter():
+            if age_band == "UNDER_6_MONTHS":
+                return ScoreAssessmentRecord.months_active < 6
+            if age_band == "MONTHS_6_TO_12":
+                return (ScoreAssessmentRecord.months_active >= 6) & (ScoreAssessmentRecord.months_active < 12)
+            if age_band == "MONTHS_12_TO_24":
+                return (ScoreAssessmentRecord.months_active >= 12) & (ScoreAssessmentRecord.months_active < 24)
+            return ScoreAssessmentRecord.months_active >= 24
+
+        with session_scope() as session:
+            base_stmt = select(ScoreAssessmentRecord.credit_score).where(_age_band_filter())
+            if normalized_industry:
+                rows = session.execute(
+                    base_stmt.where(ScoreAssessmentRecord.industry_code == normalized_industry)
+                ).scalars().all()
+                segment_type = "age_and_industry"
+                if len(rows) < 5:
+                    rows = session.execute(base_stmt).scalars().all()
+                    segment_type = "age_band"
+            else:
+                rows = session.execute(base_stmt).scalars().all()
+                segment_type = "age_band"
+
+        scores = sorted(int(v) for v in rows if v is not None)
+        if len(scores) < 5:
+            percentile = max(1, min(99, int(round(((credit_score - 300) / 600) * 100))))
+            sample_size = len(scores)
+            segment_type = "fallback_score_scale"
+        else:
+            below = sum(1 for value in scores if value < credit_score)
+            percentile = max(1, min(99, int(round((below / len(scores)) * 100))))
+            sample_size = len(scores)
+
+        return {
+            "score_percentile": percentile,
+            "age_band": age_band,
+            "industry_code": normalized_industry,
+            "sample_size": sample_size,
+            "segment_type": segment_type,
+            "statement": (
+                f"Better than {percentile}% of MSMEs on the current score scale"
+                if segment_type == "fallback_score_scale"
+                else (
+                    f"Better than {percentile}% of MSMEs in this "
+                    f"{'age and sector' if segment_type == 'age_and_industry' else 'age'} group"
+                )
+            ),
+        }
 
     def get_latest_assessment_model_version(self, gstin: str) -> str | None:
         with session_scope() as session:
@@ -259,6 +324,7 @@ class ScoreStorage:
         real_label_ratio: float,
         auc_before: float | None,
         auc_after: float | None,
+        feature_schema_version: str,
         metrics: Dict[str, Any],
     ) -> None:
         with session_scope() as session:
@@ -272,6 +338,7 @@ class ScoreStorage:
                     real_label_ratio=real_label_ratio,
                     auc_before=auc_before,
                     auc_after=auc_after,
+                    feature_schema_version=feature_schema_version,
                     metrics_json=json.dumps(metrics),
                 )
             )
@@ -288,6 +355,7 @@ class ScoreStorage:
                     ModelVersionRecord.real_label_ratio,
                     ModelVersionRecord.auc_before,
                     ModelVersionRecord.auc_after,
+                    ModelVersionRecord.feature_schema_version,
                     ModelVersionRecord.metrics_json,
                 )
                 .order_by(ModelVersionRecord.trained_at.desc())
@@ -303,6 +371,7 @@ class ScoreStorage:
                 "real_label_ratio": row.real_label_ratio,
                 "auc_before": row.auc_before,
                 "auc_after": row.auc_after,
+                "feature_schema_version": row.feature_schema_version,
                 "metrics": json.loads(row.metrics_json),
             }
             for row in rows

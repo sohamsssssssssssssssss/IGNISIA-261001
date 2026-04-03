@@ -20,6 +20,8 @@ class ScoreAssessmentRecord(Base):
     risk_band: Mapped[str] = mapped_column(String(64))
     fraud_risk: Mapped[str] = mapped_column(String(32))
     model_version: Mapped[str] = mapped_column(String(128))
+    industry_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    months_active: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     scenario: Mapped[str] = mapped_column(String(32))
     data_sparse: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     freshness_timestamp: Mapped[str] = mapped_column(String(64))
@@ -102,6 +104,7 @@ class ModelVersionRecord(Base):
     real_label_ratio: Mapped[float] = mapped_column(Float, nullable=False)
     auc_before: Mapped[float | None] = mapped_column(Float, nullable=True)
     auc_after: Mapped[float | None] = mapped_column(Float, nullable=True)
+    feature_schema_version: Mapped[str] = mapped_column(String(128), nullable=False, default="unknown")
     metrics_json: Mapped[str] = mapped_column(Text)
 
 

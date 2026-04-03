@@ -62,8 +62,6 @@ class Settings:
     database_url: str
     database_path: str
     model_artifact_dir: str
-    score_history_seed_count: int
-    seed_score_history: bool
     default_history_page_size: int
     max_history_page_size: int
     require_auth: bool
@@ -96,8 +94,6 @@ def get_settings() -> Settings:
         database_url=database_url,
         database_path=database_path,
         model_artifact_dir=os.getenv("MODEL_ARTIFACT_DIR", str(default_model_artifact_dir)),
-        score_history_seed_count=int(os.getenv("SCORE_HISTORY_SEED_COUNT", "5")),
-        seed_score_history=_parse_bool(os.getenv("SEED_SCORE_HISTORY"), default=False),
         default_history_page_size=int(os.getenv("DEFAULT_HISTORY_PAGE_SIZE", "20")),
         max_history_page_size=int(os.getenv("MAX_HISTORY_PAGE_SIZE", "100")),
         require_auth=_parse_bool(

@@ -96,7 +96,7 @@ flowchart LR
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/v1/score/{gstin}` | Score a borrower — returns credit score, SHAP reasons, fraud assessment, loan recommendation |
-| `GET` | `/api/v1/score/{gstin}/history` | Paginated score history (`page`, `page_size`, `include_seed` params) |
+| `GET` | `/api/v1/score/{gstin}/history` | Paginated score history (`page`, `page_size`) |
 | `GET` | `/api/v1/score/{gstin}/export.docx` | Download DOCX scorecard |
 | `POST` | `/api/v1/model/retrain` | Retrain and persist model artifact (admin auth required) |
 
@@ -245,7 +245,7 @@ The platform ships with three demo GSTINs to showcase the system's discriminatio
 │   └── src/
 │       ├── App.tsx              # Main app shell with WebSocket pipeline
 │       ├── components/          # Dashboard, UploadForm, PromoterGraph (D3)
-│       └── components/msme/     # MSME scoring UI (ScoreHero, ShapChart, FraudDetection, etc.)
+│       └── components/msme/     # MSME scoring UI (ScoreHero, ShapWaterfall, FraudDetection, etc.)
 ├── tests/                       # Backend regression tests
 ├── .github/workflows/ci.yml    # GitHub Actions CI
 ├── docker-compose.yml           # Full-stack deployment
