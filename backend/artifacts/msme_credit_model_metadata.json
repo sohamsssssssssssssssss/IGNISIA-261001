@@ -1,0 +1,184 @@
+{
+  "model_version": "xgb-msme-v12.0-20260403111229",
+  "backend": "xgboost",
+  "trained_at": "2026-04-03T11:12:29.725214Z",
+  "feature_names": [
+    "gst_filing_rate",
+    "gst_avg_delay_days",
+    "gst_on_time_pct",
+    "gst_e_invoice_velocity",
+    "gst_e_invoice_trend",
+    "gst_itc_variance_avg",
+    "gst_itc_variance_trend",
+    "upi_avg_daily_txns",
+    "upi_regularity_score",
+    "upi_inflow_outflow_ratio",
+    "upi_round_amount_pct",
+    "upi_net_cash_flow",
+    "upi_counterparty_diversity",
+    "upi_volume_growth",
+    "eway_avg_monthly_bills",
+    "eway_volume_momentum",
+    "eway_mom_growth",
+    "eway_interstate_ratio",
+    "eway_cancellation_rate",
+    "eway_avg_bill_value",
+    "history_months_active",
+    "gst_filing_history_interaction",
+    "upi_regularity_history_interaction",
+    "overall_data_confidence"
+  ],
+  "training_schema_id": "lagged-panel-interactions-v12-tail-calibrated-real-feedback",
+  "model_metrics": {
+    "accuracy": 0.6745,
+    "auc": 0.7729,
+    "precision": 0.7719,
+    "recall": 0.6449,
+    "positive_rate": 0.5966,
+    "train_distribution": {
+      "features": 24,
+      "samples": 642
+    },
+    "raw_model_auc": 0.7751,
+    "raw_model_brier": 0.1855,
+    "calibrated_brier": 0.1799,
+    "calibration_method": "isotonic_regression_tail_regularized",
+    "score_mapping": "non_linear_power_curve_1.1",
+    "calibration_curve": [
+      {
+        "bin_start": 0.0,
+        "bin_end": 0.1,
+        "sample_count": 30,
+        "mean_raw_probability": 0.0513,
+        "mean_calibrated_probability": 0.0886,
+        "observed_repayment_rate": 0.1667
+      },
+      {
+        "bin_start": 0.1,
+        "bin_end": 0.2,
+        "sample_count": 24,
+        "mean_raw_probability": 0.1515,
+        "mean_calibrated_probability": 0.2148,
+        "observed_repayment_rate": 0.2917
+      },
+      {
+        "bin_start": 0.2,
+        "bin_end": 0.3,
+        "sample_count": 28,
+        "mean_raw_probability": 0.2503,
+        "mean_calibrated_probability": 0.2769,
+        "observed_repayment_rate": 0.3929
+      },
+      {
+        "bin_start": 0.3,
+        "bin_end": 0.4,
+        "sample_count": 97,
+        "mean_raw_probability": 0.36,
+        "mean_calibrated_probability": 0.4473,
+        "observed_repayment_rate": 0.4536
+      },
+      {
+        "bin_start": 0.4,
+        "bin_end": 0.5,
+        "sample_count": 116,
+        "mean_raw_probability": 0.4552,
+        "mean_calibrated_probability": 0.48,
+        "observed_repayment_rate": 0.4828
+      },
+      {
+        "bin_start": 0.5,
+        "bin_end": 0.6,
+        "sample_count": 88,
+        "mean_raw_probability": 0.5496,
+        "mean_calibrated_probability": 0.5119,
+        "observed_repayment_rate": 0.4545
+      },
+      {
+        "bin_start": 0.6,
+        "bin_end": 0.7,
+        "sample_count": 41,
+        "mean_raw_probability": 0.6454,
+        "mean_calibrated_probability": 0.6229,
+        "observed_repayment_rate": 0.5366
+      },
+      {
+        "bin_start": 0.7,
+        "bin_end": 0.8,
+        "sample_count": 21,
+        "mean_raw_probability": 0.7408,
+        "mean_calibrated_probability": 0.6481,
+        "observed_repayment_rate": 0.7143
+      },
+      {
+        "bin_start": 0.8,
+        "bin_end": 0.9,
+        "sample_count": 19,
+        "mean_raw_probability": 0.8446,
+        "mean_calibrated_probability": 0.7218,
+        "observed_repayment_rate": 0.5789
+      },
+      {
+        "bin_start": 0.9,
+        "bin_end": 1.0,
+        "sample_count": 178,
+        "mean_raw_probability": 0.9767,
+        "mean_calibrated_probability": 0.9267,
+        "observed_repayment_rate": 0.9663
+      }
+    ],
+    "feature_schema_version": "lagged-panel-interactions-v12-tail-calibrated-real-feedback",
+    "synthetic_dataset": {
+      "generation_method": "event_driven_panel_v12",
+      "label_target": "loan_stays_current_over_next_3_months",
+      "label_horizon_months": 3,
+      "panel_rows": 4407,
+      "synthetic_businesses": 1800,
+      "archetype_distribution": {
+        "healthy_grower": 0.6989,
+        "struggling_honest": 0.2011,
+        "fraudulent": 0.1
+      },
+      "event_rates": {
+        "missed_filing": 0.2769,
+        "delayed_payment": 0.172,
+        "circular_fund_rotation": 0.236,
+        "shipment_stall": 0.1351,
+        "default_in_3m": 0.1753
+      },
+      "non_linear_interactions": [
+        "gst_filing_rate x history_months_active",
+        "upi_regularity_score x history_months_active",
+        "delayed_payment_event x shipment_stall_event"
+      ],
+      "noise_terms": [
+        "hidden_shock",
+        "management_quality",
+        "market_tailwind",
+        "capital_buffer",
+        "age_penalty"
+      ],
+      "inference_feature_count": 24,
+      "hidden_variables_exposed_to_model": false,
+      "calibration_target": "repayment_probability",
+      "feature_schema_version": "lagged-panel-interactions-v12-tail-calibrated-real-feedback",
+      "real_outcomes": {
+        "real_sample_count": 0,
+        "real_positive_rate": null,
+        "real_outcome_threshold_met": false,
+        "used_for_training": false,
+        "minimum_required": 50
+      },
+      "split_strategy": "group_shuffle_split_train_cal_test_by_business",
+      "split_counts": {
+        "train": 3073,
+        "calibration": 692,
+        "test": 642
+      }
+    }
+  },
+  "calibration_method": "isotonic_regression_tail_regularized",
+  "score_mapping": "non_linear_power_curve_1.1",
+  "calibration_curve_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_calibration_curve.json",
+  "model_artifact_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_xgb.json",
+  "calibration_artifact_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_calibrator.pkl"
+}
