@@ -10,6 +10,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from .gst_policy import summarize_gst_amnesty_policy
+
 
 # ──────────────────────────────────────────────────────────
 #  SPARSE DATA IMPUTATION
@@ -73,7 +75,8 @@ def extract_gst_features(gst_data: Dict[str, Any]) -> Dict[str, float]:
     """
     months = gst_data.get("months_active", 0)
     confidence = _confidence_weight(months)
-    metrics = gst_data.get("velocity_metrics", {})
+    policy_summary = summarize_gst_amnesty_policy(gst_data)
+    metrics = policy_summary["adjusted_metrics"] if policy_summary.get("amnesty_applied") else gst_data.get("velocity_metrics", {})
     history = gst_data.get("filing_history", [])
 
     filing_rate = metrics.get("filings_per_month", POPULATION_DEFAULTS["gst_filing_rate"])

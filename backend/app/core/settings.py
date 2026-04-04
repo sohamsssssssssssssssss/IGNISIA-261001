@@ -9,7 +9,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 
 def _parse_bool(value: str | None, default: bool) -> bool:
@@ -71,6 +71,10 @@ class Settings:
     pipeline_interval_seconds: int
     pipeline_auto_start: bool
     auto_migrate_database: bool
+    gst_amnesty_enabled: bool
+    gst_amnesty_start: Optional[str]
+    gst_amnesty_end: Optional[str]
+    gst_amnesty_periods: List[str]
     chroma_persist_dir: str
     embedding_model_name: str
 
@@ -110,6 +114,10 @@ def get_settings() -> Settings:
         pipeline_interval_seconds=int(os.getenv("PIPELINE_INTERVAL_SECONDS", "900")),
         pipeline_auto_start=_parse_bool(os.getenv("PIPELINE_AUTO_START"), default=True),
         auto_migrate_database=_parse_bool(os.getenv("AUTO_MIGRATE_DATABASE"), default=False),
+        gst_amnesty_enabled=_parse_bool(os.getenv("GST_AMNESTY_ENABLED"), default=False),
+        gst_amnesty_start=os.getenv("GST_AMNESTY_START") or None,
+        gst_amnesty_end=os.getenv("GST_AMNESTY_END") or None,
+        gst_amnesty_periods=_parse_csv(os.getenv("GST_AMNESTY_PERIODS"), default=[]),
         chroma_persist_dir=os.getenv("CHROMA_PERSIST_DIR", str(default_chroma_persist_dir)),
         embedding_model_name=os.getenv(
             "EMBEDDING_MODEL_NAME",

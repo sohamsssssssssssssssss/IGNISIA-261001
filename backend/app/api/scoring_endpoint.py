@@ -31,6 +31,7 @@ from ..core.xgboost_model import (
 from ..services.feature_engineering import build_feature_vector
 from ..services.graph_serializer import serialize_graph
 from ..services.simulator import run_simulation
+from ..services.gst_policy import summarize_gst_amnesty_policy
 from ..services.embedding_service import get_embedding_service
 from ..services.apriori_service import get_apriori_service
 from ..services.llm_service import get_llm_service
@@ -281,6 +282,13 @@ def _score_assessment_payload(
     audit_log("Mock pipelines initialised — GST, UPI, e-Way Bill")
     features = build_feature_vector(pipeline_data)
     audit_log(f"Feature engineering complete — {len(features)} features extracted")
+    gst_policy = summarize_gst_amnesty_policy(pipeline_data.get("gst_velocity", {}))
+    if gst_policy.get("amnesty_applied"):
+        audit_log(
+            "GST amnesty applied — neutralized "
+            f"{gst_policy.get('neutralized_late_filings', 0)} late filing(s) "
+            f"across {len(gst_policy.get('covered_periods', []))} covered period(s)"
+        )
 
     scorer = get_scorer()
     score_result = scorer.score(features)
@@ -414,6 +422,7 @@ def _score_assessment_payload(
     data_freshness = _build_data_freshness(pipeline_data)
     missing_streams = _derive_missing_streams(pipeline_data)
     historical_patterns: list[dict[str, Any]] = []
+    gst_velocity_metrics = gst_policy.get("adjusted_metrics", {}) or pipeline_data["gst_velocity"]["velocity_metrics"]
 
     try:
         inferred_outcome = "repaid" if score_result["recommendation"].get("eligible") else "defaulted"
@@ -457,14 +466,15 @@ def _score_assessment_payload(
         "fraud_penalty_applied": score_result.get("fraud_penalty_applied", False),
         "pipeline_signals": {
             "gst_velocity": {
-                "filing_rate": pipeline_data["gst_velocity"]["velocity_metrics"]["filings_per_month"],
-                "avg_delay": pipeline_data["gst_velocity"]["velocity_metrics"]["avg_delay_days"],
-                "on_time_pct": pipeline_data["gst_velocity"]["velocity_metrics"]["on_time_pct"],
+                "filing_rate": gst_velocity_metrics["filings_per_month"],
+                "avg_delay": gst_velocity_metrics["avg_delay_days"],
+                "on_time_pct": gst_velocity_metrics["on_time_pct"],
                 "e_invoice_trend": pipeline_data["gst_velocity"]["velocity_metrics"]["e_invoice_trend"],
                 "months_active": pipeline_data["gst_velocity"]["months_active"],
                 "sparse_data": pipeline_data["gst_velocity"]["sparse_data"],
                 "confidence_weight": confidence_summary["gst_confidence"],
                 "data_freshness": pipeline_data["gst_velocity"]["data_freshness"],
+                "policy_adjustment": gst_policy,
             },
             "upi_cadence": {
                 "avg_daily_txns": pipeline_data["upi_cadence"]["cadence_metrics"]["avg_daily_txns"],
@@ -489,6 +499,7 @@ def _score_assessment_payload(
         },
         "feature_vector": features,
         "confidence_summary": confidence_summary,
+        "gst_policy": gst_policy,
         "data_sources": data_sources,
         "data_freshness": data_freshness,
         "score_history": score_history,

@@ -289,6 +289,53 @@ def test_model_metrics_include_calibration_curve(client):
     assert isinstance(metrics["calibration_curve"], list)
 
 
+def test_score_payload_surfaces_gst_amnesty_adjustment(client, monkeypatch):
+    monkeypatch.setenv("GST_AMNESTY_ENABLED", "true")
+    monkeypatch.setenv("GST_AMNESTY_PERIODS", "2026-01,2026-02,2026-03")
+    get_settings.cache_clear()
+
+    _hydrate_demo_data()
+    storage = get_storage()
+    gstin = "29CLEAN5678B1Z2"
+    pipeline_data = storage.get_pipeline_data(gstin)
+    assert pipeline_data is not None
+
+    gst_velocity = dict(pipeline_data["gst_velocity"])
+    gst_velocity["months_active"] = 12
+    gst_velocity["filing_history"] = [
+        {"period": "2025-12", "filed": True, "delay_days": 12, "due_date": "2025-12-11", "e_invoice_count": 44, "itc_variance_pct": 4.0},
+        {"period": "2026-01", "filed": True, "delay_days": 18, "due_date": "2026-01-11", "e_invoice_count": 46, "itc_variance_pct": 4.5},
+        {"period": "2026-02", "filed": True, "delay_days": 15, "due_date": "2026-02-11", "e_invoice_count": 48, "itc_variance_pct": 4.8},
+        {"period": "2026-03", "filed": False, "delay_days": None, "due_date": "2026-03-11", "e_invoice_count": 0, "itc_variance_pct": 5.0},
+    ]
+    gst_velocity["velocity_metrics"] = {
+        "filings_per_month": 0.75,
+        "avg_delay_days": 15.0,
+        "on_time_pct": 0.0,
+        "total_e_invoices": 138,
+        "e_invoice_trend": "accelerating",
+    }
+    storage.store_pipeline_data(
+        gstin=gstin,
+        pipeline_type="gst_velocity",
+        epoch=999,
+        data=gst_velocity,
+        ingested_at=pipeline_data["pipeline_ingested_at"]["gst_velocity"],
+    )
+
+    response = client.post(f"/api/v1/score/{gstin}")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["gst_policy"]["amnesty_applied"] is True
+    assert payload["gst_policy"]["neutralized_late_filings"] == 2
+    assert payload["gst_policy"]["excluded_unfiled_periods"] == 1
+    assert payload["gst_policy"]["raw_metrics"]["avg_delay_days"] == 15.0
+    assert payload["gst_policy"]["adjusted_metrics"]["avg_delay_days"] == 4.0
+    assert payload["pipeline_signals"]["gst_velocity"]["avg_delay"] == 4.0
+    assert payload["pipeline_signals"]["gst_velocity"]["on_time_pct"] == 66.7
+
+
 def test_young_business_explanation_uses_maturity_umbrella_reason():
     months = 3
     features = {

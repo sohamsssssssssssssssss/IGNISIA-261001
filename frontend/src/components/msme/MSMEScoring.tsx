@@ -133,6 +133,10 @@ function toSimilarCasesPanelCases(similarCases: Array<any> | undefined) {
   }));
 }
 
+function formatGstPolicyPeriods(periods: Array<string> | undefined) {
+  return (periods ?? []).filter(Boolean).join(', ');
+}
+
 function HistoricalPatternCard({
   pattern,
 }: {
@@ -231,6 +235,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
 
   const narrativePayload = useMemo(() => normalizeNarrativePayload(result), [result]);
   const sourceBundle = useMemo(() => normalizeSourceBundle(result), [result]);
+  const gstPolicy = useMemo(() => result?.gst_policy ?? null, [result]);
   const similarCases = useMemo(
     () => toSimilarCasesPanelCases(sourceBundle?.similarCases),
     [sourceBundle],
@@ -545,6 +550,12 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
         {result && !loading && (
           <div className="msme-fadein" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <DataSourceBanner dataSources={result.data_sources} onRefresh={handleRefresh} refreshing={refreshing} />
+            {gstPolicy?.amnesty_applied ? (
+              <div className="msme-alert msme-alert--warning">
+                GST amnesty adjustment applied for {formatGstPolicyPeriods(gstPolicy.covered_periods)}. GST timeliness penalties were neutralized for {gstPolicy.neutralized_late_filings} late filing(s)
+                {gstPolicy.excluded_unfiled_periods ? ` and ${gstPolicy.excluded_unfiled_periods} amnesty-covered unfiled period(s) were excluded from filing-rate penalties` : ''}.
+              </div>
+            ) : null}
             <ScoreHero
               creditScore={result.credit_score}
               riskBand={result.risk_band}
