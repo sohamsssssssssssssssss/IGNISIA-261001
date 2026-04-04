@@ -30,6 +30,8 @@ OWNER_NARRATIVE_SYSTEM_PROMPT = (
     "Write in a warm, direct tone as if advising a close friend who owns a small business. "
     "Write exactly 3 to 4 sentences. Do not use financial or statistical jargon. "
     "Do not mention SHAP, XGBoost, feature vectors, model calibration, deltas, or probabilities. "
+    "Use only the facts provided. Keep the credit score on the 300 to 900 scale and never convert it to a 100-point score. "
+    "Do not invent timelines, lender names, or score targets that are not in the prompt. "
     "End with one specific actionable next step the business owner can take this week."
 )
 OWNER_NARRATIVE_BANNED_TERMS = (
@@ -154,7 +156,7 @@ class LLMService:
             system_prompt=OWNER_NARRATIVE_SYSTEM_PROMPT,
         )
 
-        safe_text = self._ensure_owner_safe_output(narrative_text)
+        safe_text = self._ensure_owner_safe_output(narrative_text, score_payload)
         if model_used == "template-fallback" or safe_text is None:
             safe_text = self._build_owner_narrative_fallback(score_payload)
             model_used = "owner-template-fallback"
@@ -266,11 +268,7 @@ class LLMService:
     def _build_owner_narrative_prompt(self, score_payload: Dict[str, Any]) -> str:
         score = int(score_payload.get("credit_score", 0))
         risk_band = self._normalize_risk_band_label(score_payload.get("risk_band", {}).get("band"))
-        top_reasons = [
-            self._translate_reason_for_owner(reason)
-            for reason in score_payload.get("top_reasons", [])[:3]
-        ]
-        top_reasons = [reason for reason in top_reasons if reason]
+        strengths, drags = self._translated_owner_reasons(score_payload)
 
         counterfactual = score_payload.get("counterfactual_recommendations") or {}
         recommendations = counterfactual.get("recommendations") or []
@@ -292,9 +290,11 @@ class LLMService:
             f"Score: {score}/900",
             f"Risk band: {risk_band}",
         ]
-        if top_reasons:
-            lines.append("Main reasons:")
-            lines.extend([f"- {reason}" for reason in top_reasons[:3]])
+        if strengths:
+            lines.append("Main strengths:")
+            lines.extend([f"- {reason}" for reason in strengths[:2]])
+        if drags:
+            lines.append(f"Main drag: {drags[0]}")
         if top_recommendation:
             lines.append(
                 "Most impactful change: "
@@ -306,10 +306,27 @@ class LLMService:
             lines.append(
                 f"Projected score at day 90 if they follow the plan: {trajectory.get('target_score_day_90', score)}."
             )
+        unlock_message = self._owner_unlock_message(score_payload)
+        if unlock_message:
+            lines.append(f"Likely lender unlock: {unlock_message}.")
         lines.append(lender_summary)
         lines.append(self._owner_fraud_sentence(score_payload))
         lines.append("Write exactly 3 to 4 sentences.")
         return "\n".join(lines)
+
+    def _translated_owner_reasons(self, score_payload: Dict[str, Any]) -> tuple[List[str], List[str]]:
+        strengths: List[str] = []
+        drags: List[str] = []
+        for reason in score_payload.get("top_reasons", []):
+            translated = self._translate_reason_for_owner(reason)
+            if not translated:
+                continue
+            shap_value = float(reason.get("shap_value", 0.0))
+            if shap_value >= 0:
+                strengths.append(translated)
+            else:
+                drags.append(translated)
+        return strengths, drags
 
     def _translate_reason_for_owner(self, reason: Dict[str, Any]) -> str:
         feature_key = str(reason.get("feature_key") or "")
@@ -348,13 +365,41 @@ class LLMService:
             )
         return "Fraud check: no major circular payment warning is currently holding the case back."
 
-    def _ensure_owner_safe_output(self, text: str) -> str | None:
+    def _owner_unlock_message(self, score_payload: Dict[str, Any]) -> str:
+        trajectory = score_payload.get("score_trajectory") or {}
+        unlock_events = trajectory.get("lender_unlock_events") or []
+        if not unlock_events:
+            return ""
+        first_unlock = min(unlock_events, key=lambda item: int(item.get("day", 999)))
+        lender_type = str(first_unlock.get("lender_type") or "the next lender tier")
+        day = int(first_unlock.get("day", 0))
+        return f"{lender_type} around day {day}"
+
+    def _as_clause(self, text: str) -> str:
+        clause = str(text or "").strip().rstrip(".")
+        if re.match(r"^[A-Z][a-z]", clause):
+            return clause[0].lower() + clause[1:]
+        return clause
+
+    def _ensure_owner_safe_output(self, text: str, score_payload: Dict[str, Any]) -> str | None:
         compact = re.sub(r"\s+", " ", (text or "").strip())
         if not compact:
             return None
         lowered = compact.lower()
         if any(term in lowered for term in OWNER_NARRATIVE_BANNED_TERMS):
             return None
+        if re.search(r"\b\d+\s*/\s*100\b", compact):
+            return None
+        trajectory = score_payload.get("score_trajectory") or {}
+        target_score = trajectory.get("target_score_day_90")
+        if target_score and str(int(target_score)) not in compact and "90 day" not in lowered and "90-day" not in lowered and "90 days" not in lowered:
+            return None
+        lender_recommendations = score_payload.get("lender_recommendations") or {}
+        roadmap_lender = lender_recommendations.get("recommended_lender") or lender_recommendations.get("closest_lender")
+        if roadmap_lender:
+            lender_name = str(roadmap_lender.get("display_name") or "").strip().lower()
+            if lender_name and lender_name not in lowered:
+                return None
         sentences = [segment.strip() for segment in re.split(r"(?<=[.!?])\s+", compact) if segment.strip()]
         if len(sentences) < 3:
             return None
@@ -366,13 +411,14 @@ class LLMService:
     def _build_owner_narrative_fallback(self, score_payload: Dict[str, Any]) -> str:
         score = int(score_payload.get("credit_score", 0))
         risk_band = self._normalize_risk_band_label(score_payload.get("risk_band", {}).get("band"))
-        translated_reasons = [
-            self._translate_reason_for_owner(reason)
-            for reason in score_payload.get("top_reasons", [])
-        ]
-        top_reason = next(
-            (reason for reason in translated_reasons if reason),
+        strengths, drags = self._translated_owner_reasons(score_payload)
+        main_drag = next(
+            (reason for reason in drags if reason),
             "lenders still need to see a stronger and more stable business pattern",
+        )
+        leading_strength = next(
+            (reason for reason in strengths if reason),
+            "the business is already showing some healthy operating signals",
         )
 
         counterfactual = score_payload.get("counterfactual_recommendations") or {}
@@ -389,8 +435,11 @@ class LLMService:
             if top_recommendation
             else "The next step is to strengthen the business signals lenders can see every month."
         )
+        unlock_message = self._owner_unlock_message(score_payload)
         third_sentence = (
-            f"If you follow that plan, your score is projected to reach about {trajectory.get('target_score_day_90', score)} within 90 days."
+            f"If you follow that plan, your score is projected to reach about {trajectory.get('target_score_day_90', score)} within 90 days, which should put you on track for {unlock_message}."
+            if unlock_message
+            else f"If you follow that plan, your score is projected to reach about {trajectory.get('target_score_day_90', score)} within 90 days."
         )
         fraud_sentence = self._owner_fraud_sentence(score_payload)
         if "no major circular payment warning" in fraud_sentence.lower():
@@ -407,7 +456,7 @@ class LLMService:
             )
 
         sentences = [
-            f"Your business is currently at {score}, which puts you in the {risk_band} range, and the main thing holding it back is that {top_reason}.",
+            f"Your business is currently at {score}, which puts you in the {risk_band} range. The strongest part of your profile is that {self._as_clause(leading_strength)}, but the main thing to improve now is that {self._as_clause(main_drag)}.",
             second_sentence,
             third_sentence,
         ]

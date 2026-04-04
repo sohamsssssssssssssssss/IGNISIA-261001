@@ -9,10 +9,6 @@ import { ModelMetricsPanel } from './ModelMetricsPanel';
 import { RuntimeStatusBanner } from './RuntimeStatusBanner';
 import ChatPanel from './ChatPanel';
 import NarrativeSummary from './NarrativeSummary';
-import MSMEExplanationCard, { type MSMEExplanationCardProps } from './MSMEExplanationCard';
-import ActionPlanCard, { type ActionItem } from './ActionPlanCard';
-import LenderMatchCard, { type LenderMatch } from './LenderMatchCard';
-import ScoreTrajectoryChart, { type TrajectoryPoint } from './ScoreTrajectoryChart';
 import SimilarCasesPanel from './SimilarCasesPanel';
 
 const ShapWaterfall = lazy(() => import('./ShapWaterfall').then(module => ({ default: module.ShapWaterfall })));
@@ -54,258 +50,6 @@ const DEMO_GSTINS = [
   { gstin: '27ARJUN1234A1Z5', label: 'Reject + Fraud', company: 'Arjun Textiles' },
   { gstin: '09NEWCO1234A1Z9', label: 'Sparse Data', company: 'New Startup' },
 ];
-
-const MOCK_MSME_EXPLANATION: NonNullable<MSMEExplanationCardProps['explanation']> = {
-  summary: 'Your business shows strong payment discipline and consistent trade activity. Based on your GST filings and UPI transaction history, you qualify for a significant loan with favorable terms.',
-  whatIsWorking: 'Your UPI transactions are highly regular and your GST filings are on time. Your e-way bill volume shows that your business is actively moving goods, which is a strong positive signal.',
-  whatNeedsWork: 'Your cash flow shows some months where outflows slightly exceed inflows. Lenders look for a healthy buffer between money coming in and money going out.',
-  nextStep: 'Maintain consistent UPI transaction activity for the next 60 days and ensure your next GST filing is submitted at least 5 days before the deadline.',
-};
-
-const MOCK_ACTIONS: ActionItem[] = [
-  {
-    rank: 1,
-    action: 'File your GST returns on time for the next 3 months',
-    description: "You've had delays in 3 of your last 8 filings. Consistent on-time filing is one of the strongest signals lenders look for in small businesses.",
-    scoreImpact: 48,
-    timeframe: '3 months',
-    category: 'gst',
-    difficulty: 'easy',
-    currentScore: 640,
-    projectedScore: 688,
-  },
-  {
-    rank: 2,
-    action: 'Increase your daily UPI transaction frequency',
-    description: 'Your UPI activity drops significantly on weekends. More consistent daily transactions show a lender that your business operates steadily.',
-    scoreImpact: 35,
-    timeframe: '60 days',
-    category: 'upi',
-    difficulty: 'medium',
-    currentScore: 688,
-    projectedScore: 723,
-  },
-  {
-    rank: 3,
-    action: 'Reduce round-number UPI transactions',
-    description: 'About 60% of your UPI transfers are in exact round amounts like Rs10,000 or Rs50,000. This pattern can look like artificial fund rotation to a credit system.',
-    scoreImpact: 22,
-    timeframe: '60 days',
-    category: 'upi',
-    difficulty: 'medium',
-    currentScore: 723,
-    projectedScore: 745,
-  },
-  {
-    rank: 4,
-    action: 'Generate more e-way bills for interstate shipments',
-    description: 'Your interstate trade ratio is below average for your sector. More documented shipments show business scale and geographic reach.',
-    scoreImpact: 18,
-    timeframe: '90 days',
-    category: 'eway',
-    difficulty: 'hard',
-    currentScore: 745,
-    projectedScore: 763,
-  },
-  {
-    rank: 5,
-    action: 'Maintain a positive cash flow buffer every month',
-    description: 'In 2 of the last 6 months, your outflows exceeded inflows. Try to maintain at least a 10% buffer between money coming in and going out.',
-    scoreImpact: 12,
-    timeframe: '3 months',
-    category: 'general',
-    difficulty: 'medium',
-    currentScore: 763,
-    projectedScore: 775,
-  },
-];
-
-const MOCK_ACTION_PLAN_GAIN = 135;
-const DEFAULT_APPROVAL_THRESHOLD = 700;
-
-function buildMockActionPlan(startingScore: number): ActionItem[] {
-  let runningScore = startingScore;
-
-  return MOCK_ACTIONS.map((item) => {
-    const projectedScore = Math.min(900, runningScore + item.scoreImpact);
-    const nextItem = {
-      ...item,
-      currentScore: runningScore,
-      projectedScore,
-    };
-    runningScore = projectedScore;
-    return nextItem;
-  });
-}
-
-function buildMockTrajectory(
-  startingScore: number,
-  actions: ActionItem[],
-): TrajectoryPoint[] {
-  const checkpoints = [
-    { day: 0, label: 'Today', actionsCompleted: 0 },
-    { day: 30, label: '30 Days', actionsCompleted: Math.min(1, actions.length) },
-    { day: 60, label: '60 Days', actionsCompleted: Math.min(3, actions.length) },
-    { day: 90, label: '90 Days', actionsCompleted: actions.length },
-  ];
-
-  return checkpoints.map((checkpoint) => {
-    const scoreGain = actions
-      .slice(0, checkpoint.actionsCompleted)
-      .reduce((total, action) => total + action.scoreImpact, 0);
-
-    return {
-      day: checkpoint.day,
-      score: Math.min(900, startingScore + scoreGain),
-      label: checkpoint.label,
-      isProjected: checkpoint.day !== 0,
-      actionsCompleted: checkpoint.actionsCompleted,
-    };
-  });
-}
-
-const MOCK_MATCH: LenderMatch = {
-  primaryType: 'nbfc',
-  primaryName: 'Non-Banking Financial Company (NBFC)',
-  primaryReason: 'Based on your current credit score and transaction history, an NBFC is your strongest option right now. NBFCs usually have more flexible underwriting than traditional banks and are comfortable with businesses at your growth stage.',
-  schemeOrProduct: 'NBFC Business Loan - Rs10L to Rs50L',
-  schemeNote: 'NBFCs typically approve loans within 5 to 7 working days and usually ask for fewer documents than a full bank loan.',
-  matchStrength: 'strong',
-  fraudCaution: false,
-  alternatives: [
-    {
-      type: 'mudra',
-      name: 'MUDRA Loan (Pradhan Mantri)',
-      note: 'Government-backed scheme with low interest rates. Best if you need under Rs10 lakh.',
-      eligibility: 'high',
-    },
-    {
-      type: 'sidbi',
-      name: 'SIDBI Direct Credit',
-      note: 'Suitable for manufacturing businesses with documented e-way bill activity.',
-      eligibility: 'medium',
-    },
-    {
-      type: 'private_bank',
-      name: 'Private Sector Bank',
-      note: 'Possible after 3 more months of consistent GST filing and UPI activity.',
-      eligibility: 'low',
-    },
-  ],
-};
-
-function buildMockLenderMatch(result: any): LenderMatch {
-  const score = Number(result?.credit_score ?? 0);
-  const band = result?.risk_band?.band ?? '';
-  const circularRisk = result?.fraud_detection?.circular_risk ?? 'LOW';
-  const fraudCaution = circularRisk === 'MEDIUM' || circularRisk === 'HIGH';
-  const recommendedAmount = Number(result?.recommendation?.recommended_amount ?? 0);
-
-  if (fraudCaution || band === 'HIGH_RISK' || band === 'VERY_HIGH_RISK') {
-    return {
-      primaryType: 'mudra',
-      primaryName: 'MUDRA-focused Public Lending Channel',
-      primaryReason: 'At your current profile, a government-supported small-ticket lender path is the most practical option. It is more suitable for borrowers who need a modest loan amount while they build a stronger repayment and compliance track record.',
-      schemeOrProduct: 'MUDRA Kishor Loan - up to Rs10L',
-      schemeNote: 'This route is often a better fit when you need working capital now and want to strengthen your profile before approaching a larger lender.',
-      matchStrength: band === 'HIGH_RISK' ? 'moderate' : 'marginal',
-      fraudCaution: true,
-      alternatives: [
-        {
-          type: 'nbfc_mfi',
-          name: 'NBFC-MFI',
-          note: 'Can be more flexible on documentation, but ticket sizes are usually smaller.',
-          eligibility: 'medium',
-        },
-        {
-          type: 'nbfc',
-          name: 'NBFC',
-          note: 'Possible if you can explain recent transaction patterns clearly during review.',
-          eligibility: 'low',
-        },
-        {
-          type: 'public_bank',
-          name: 'Public Sector Bank',
-          note: 'Better approached after your risk profile settles and your filings stay consistent.',
-          eligibility: 'low',
-        },
-      ],
-    };
-  }
-
-  if (score >= 800 || band === 'VERY_LOW_RISK') {
-    return {
-      primaryType: 'private_bank',
-      primaryName: 'Private Sector Bank',
-      primaryReason: 'Your current profile is strong enough for a mainstream bank conversation right now. Private banks are usually a good fit for businesses with clean signals, stronger scores, and a need for faster sanctioning than a traditional public-bank process.',
-      schemeOrProduct: recommendedAmount >= 5_000_000 ? 'Business Term Loan - Mid-market ticket' : 'Business Working Capital Line',
-      schemeNote: 'This path usually works best when you want a larger sanctioned amount and already have a stable operating pattern.',
-      matchStrength: 'strong',
-      fraudCaution: false,
-      alternatives: [
-        {
-          type: 'public_bank',
-          name: 'Public Sector Bank',
-          note: 'Often competitive on pricing if you are comfortable with a slower documentation process.',
-          eligibility: 'high',
-        },
-        {
-          type: 'sidbi',
-          name: 'SIDBI Direct Credit',
-          note: 'Particularly relevant if your business is manufacturing-led or scaling operations.',
-          eligibility: 'medium',
-        },
-        {
-          type: 'nbfc',
-          name: 'NBFC',
-          note: 'Usually faster on turnaround, though rates may be slightly higher than a bank.',
-          eligibility: 'medium',
-        },
-      ],
-    };
-  }
-
-  if (score >= 680 || band === 'LOW_RISK' || band === 'MEDIUM_RISK') {
-    return {
-      ...MOCK_MATCH,
-      fraudCaution,
-      matchStrength: band === 'MEDIUM_RISK' ? 'moderate' : 'strong',
-      schemeOrProduct: recommendedAmount > 0 && recommendedAmount < 1_000_000
-        ? 'NBFC Working Capital Loan - up to Rs10L'
-        : MOCK_MATCH.schemeOrProduct,
-    };
-  }
-
-  return {
-    primaryType: 'nbfc_mfi',
-    primaryName: 'NBFC-MFI or Small Business Lender',
-    primaryReason: 'Right now, a flexible small-business lender is likely to be the best entry point. This route is usually better for borrowers who are still building a stronger financial footprint but need access to credit sooner.',
-    schemeOrProduct: 'Micro Enterprise Loan - Small-ticket working capital',
-    schemeNote: 'This option is best used as a stepping stone while you improve your credit profile over the next few months.',
-    matchStrength: 'moderate',
-    fraudCaution: false,
-    alternatives: [
-      {
-        type: 'mudra',
-        name: 'MUDRA Loan (Pradhan Mantri)',
-        note: 'A sensible alternative if your loan need is smaller and document-ready.',
-        eligibility: 'medium',
-      },
-      {
-        type: 'nbfc',
-        name: 'NBFC',
-        note: 'Could become a stronger option after a short period of cleaner operating consistency.',
-        eligibility: 'medium',
-      },
-      {
-        type: 'private_bank',
-        name: 'Private Sector Bank',
-        note: 'Best approached later once your score and stability improve further.',
-        eligibility: 'low',
-      },
-    ],
-  };
-}
 
 interface MSMEScoringProps {
   showTopbar?: boolean;
@@ -376,6 +120,36 @@ function normalizeSourceBundle(result: any) {
       ?? sourcePayload.guidelines_referenced
       ?? [],
   };
+}
+
+function formatRiskBandLabel(value: string | null | undefined): string {
+  const label = (value || '').trim();
+  if (!label) return 'Unknown';
+  return label
+    .toLowerCase()
+    .split('_')
+    .map((item) => item.charAt(0).toUpperCase() + item.slice(1))
+    .join(' ');
+}
+
+function formatInr(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return 'INR 0';
+  return `INR ${Math.round(value).toLocaleString('en-IN')}`;
+}
+
+function summarizeReason(reason: any): string | null {
+  const raw = String(reason?.reason || reason?.feature || '').trim();
+  if (!raw) return null;
+  return raw.replace(/\s*\([^)]+\)\s*$/, '').trim();
+}
+
+function getTopReason(result: any, direction: 'positive' | 'negative'): string | null {
+  const reasons = Array.isArray(result?.top_reasons) ? result.top_reasons : [];
+  const match = reasons.find((reason: any) => {
+    const shapValue = Number(reason?.shap_value ?? 0);
+    return direction === 'positive' ? shapValue >= 0 : shapValue < 0;
+  });
+  return summarizeReason(match);
 }
 
 function toSimilarCasesPanelCases(similarCases: Array<any> | undefined) {
@@ -456,15 +230,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
   const [showGraph, setShowGraph] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [historicalPatterns, setHistoricalPatterns] = useState<Array<{ explanation: string; confidence: number; lift: number; record_count: number }>>([]);
-  const [msmeExplanation, setMsmeExplanation] = useState<MSMEExplanationCardProps['explanation']>(null);
-  const [msmeExplanationLoading, setMsmeExplanationLoading] = useState(false);
-  const [actionPlan, setActionPlan] = useState<ActionItem[] | null>(null);
-  const [actionPlanLoading, setActionPlanLoading] = useState(false);
-  const [maxPossibleGain, setMaxPossibleGain] = useState<number | null>(null);
-  const [lenderMatch, setLenderMatch] = useState<LenderMatch | null>(null);
-  const [lenderMatchLoading, setLenderMatchLoading] = useState(false);
-  const [trajectory, setTrajectory] = useState<TrajectoryPoint[] | null>(null);
-  const [trajectoryLoading, setTrajectoryLoading] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -504,6 +269,20 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     () => toSimilarCasesPanelCases(sourceBundle?.similarCases),
     [sourceBundle],
   );
+  const topRecommendation = useMemo(
+    () => result?.counterfactual_recommendations?.recommendations?.[0] ?? null,
+    [result],
+  );
+  const firstUnlockEvent = useMemo(
+    () => result?.score_trajectory?.lender_unlock_events?.[0] ?? null,
+    [result],
+  );
+  const roadmapLender = useMemo(
+    () => result?.lender_recommendations?.recommended_lender ?? result?.lender_recommendations?.closest_lender ?? null,
+    [result],
+  );
+  const strongestSignal = useMemo(() => getTopReason(result, 'positive'), [result]);
+  const biggestDrag = useMemo(() => getTopReason(result, 'negative'), [result]);
 
   useEffect(() => {
     if (!result?.gstin) {
@@ -576,27 +355,11 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setGraphData(null);
     setShowGraph(false);
     setChatOpen(false);
-    setMsmeExplanation(null);
-    setMsmeExplanationLoading(true);
-    setActionPlan(null);
-    setActionPlanLoading(true);
-    setMaxPossibleGain(null);
-    setLenderMatch(null);
-    setLenderMatchLoading(true);
-    setTrajectory(null);
-    setTrajectoryLoading(true);
 
     try {
       const { data, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
-      const nextCurrentScore = Number(data?.credit_score ?? 640);
-      const nextActionPlan = buildMockActionPlan(nextCurrentScore);
       setResult(data);
       setGraphData(graphPayload);
-      setMsmeExplanation(MOCK_MSME_EXPLANATION);
-      setActionPlan(nextActionPlan);
-      setMaxPossibleGain(MOCK_ACTION_PLAN_GAIN);
-      setLenderMatch(buildMockLenderMatch(data));
-      setTrajectory(buildMockTrajectory(nextCurrentScore, nextActionPlan));
 
       if (gstinOverride) {
         setGstin(gstinOverride);
@@ -609,16 +372,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
       }
     } catch (e: any) {
       setError(e.message || 'Failed to connect to scoring API');
-      setMsmeExplanation(null);
-      setActionPlan(null);
-      setMaxPossibleGain(null);
-      setLenderMatch(null);
-      setTrajectory(null);
     } finally {
-      setMsmeExplanationLoading(false);
-      setActionPlanLoading(false);
-      setLenderMatchLoading(false);
-      setTrajectoryLoading(false);
       setLoading(false);
     }
   };
@@ -699,15 +453,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setGraphData(null);
     setShowGraph(false);
     setChatOpen(false);
-    setMsmeExplanation(null);
-    setMsmeExplanationLoading(false);
-    setActionPlan(null);
-    setActionPlanLoading(false);
-    setMaxPossibleGain(null);
-    setLenderMatch(null);
-    setLenderMatchLoading(false);
-    setTrajectory(null);
-    setTrajectoryLoading(false);
   };
 
   const handleRefresh = async (stream?: string) => {
@@ -853,80 +598,103 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
               topReason={result.top_reasons?.[0] || null}
             />
 
+            <div className="msme-story-banner">
+              <div className="msme-story-banner__eyebrow">What Is Novel Here</div>
+              <div className="msme-story-banner__title">
+                One scoring run now answers four business questions in order: why this score, what to change, how fast that changes it, and which lender tier unlocks next.
+              </div>
+              <div className="msme-story-banner__body">
+                The roadmap below is fully live-data driven. Counterfactual lifts are generated by rescoring nudged feature vectors, the 90-day curve is recomputed from those recommendations, and lender unlock events are read from the same policy thresholds used for the current lender match.
+              </div>
+            </div>
+
+            <div className="msme-section-heading-wrap">
+              <div className="msme-section-kicker">Business Owner Roadmap</div>
+              <div className="msme-section-heading">
+                Clean explanation first, then a ranked action plan, projected timing, and lender access.
+              </div>
+            </div>
+
             {result.owner_narrative && (
               <div className="msme-card">
                 <div className="msme-card-title">Owner Guidance</div>
                 <div className="msme-inline-meta" style={{ marginBottom: 12 }}>
-                  Plain-English summary for the business owner
+                  Warm, plain-English summary generated from the current score, the top action, the 90-day path, and lender fit
                 </div>
-                <div style={{ color: 'var(--text)', fontSize: '1rem', lineHeight: 1.8 }}>
+                <div style={{ color: 'var(--text)', fontSize: '1rem', lineHeight: 1.9 }}>
                   {result.owner_narrative}
                 </div>
               </div>
             )}
 
-            <NarrativeSummary
-              isLoading={loading}
-              narrative={narrativePayload}
-              sources={sourceBundle}
-              onRegenerate={handleNarrativeRegenerate}
-              isRegenerating={narrativeRegenerating}
-            />
+            <div className="msme-highlight-grid">
+              <div className="msme-highlight-card">
+                <div className="msme-highlight-label">Biggest Move Now</div>
+                <div className="msme-highlight-value">
+                  {topRecommendation?.feature_name ?? 'Roadmap pending'}
+                </div>
+                <div className="msme-highlight-body">
+                  {topRecommendation
+                    ? `${topRecommendation.current_value_display} → ${topRecommendation.target_value_display} for about +${topRecommendation.estimated_score_improvement} points.`
+                    : 'Run the counterfactual engine to identify the first high-impact action.'}
+                </div>
+              </div>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                margin: '8px 0',
-              }}
-            >
-              <div style={{ flex: 1, borderTop: '1px solid rgba(42,157,143,0.15)' }} />
-              <span
-                style={{
-                  fontFamily: 'IBM Plex Sans',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  color: '#2A9D8F',
-                  opacity: 0.7,
-                }}
-              >
-                For the Business Owner
-              </span>
-              <div style={{ flex: 1, borderTop: '1px solid rgba(42,157,143,0.15)' }} />
+              <div className="msme-highlight-card">
+                <div className="msme-highlight-label">Lender Roadmap</div>
+                <div className="msme-highlight-value">
+                  {firstUnlockEvent?.lender_type ?? roadmapLender?.display_name ?? 'No unlock yet'}
+                </div>
+                <div className="msme-highlight-body">
+                  {firstUnlockEvent?.message
+                    ?? roadmapLender?.gap_statement
+                    ?? 'Current lender fit will appear once the score roadmap is available.'}
+                </div>
+              </div>
+
+              <div className="msme-highlight-card">
+                <div className="msme-highlight-label">Decision Reliability</div>
+                <div className="msme-highlight-value">
+                  {freshnessMeta.anyRed ? 'Manual review needed' : 'Live decision trace available'}
+                </div>
+                <div className="msme-highlight-body">
+                  Source mode: {result?.data_sources?.source_mode ?? 'unknown'}.
+                  {` `}
+                  {freshnessMeta.anyManualReview
+                    ? 'One or more source feeds are stale, so the case should be reviewed before automated approval.'
+                    : 'All active feeds are fresh enough for an automated recommendation path.'}
+                </div>
+              </div>
             </div>
 
-            <MSMEExplanationCard
-              explanation={msmeExplanation}
-              creditScore={result?.credit_score ?? null}
-              riskBand={result?.risk_band?.band ?? null}
-              isLoading={msmeExplanationLoading}
-              businessName={result?.company_name}
-            />
+            <div className="msme-grid-2">
+              <div className="msme-card">
+                <div className="msme-card-title">Why This Output Is Credible</div>
+                <div className="msme-proof-list">
+                  <div className="msme-proof-item">
+                    The top 5 recommendations are not generic tips. Each one comes from rerunning the model after nudging exactly one actionable business signal.
+                  </div>
+                  <div className="msme-proof-item">
+                    The combined projection is recomputed with all recommended changes applied together, so it does not overstate gains by naïvely adding individual lifts.
+                  </div>
+                  <div className="msme-proof-item">
+                    Lender unlock events and current lender matching both come from the same threshold policy, which keeps the roadmap and the current qualification decision consistent.
+                  </div>
+                  <div className="msme-proof-item">
+                    Strongest current positive signal: {strongestSignal ?? 'not available yet'}. Main drag still holding the case back: {biggestDrag ?? 'not available yet'}.
+                  </div>
+                </div>
+                <div className="msme-inline-meta" style={{ marginTop: 14 }}>
+                  Requested amount: {formatInr(Number(result?.requested_loan_amount ?? 0))} · Risk band: {formatRiskBandLabel(result?.risk_band?.band)}
+                </div>
+              </div>
 
-            <ActionPlanCard
-              actions={actionPlan}
-              currentScore={result?.credit_score ?? null}
-              maxPossibleGain={maxPossibleGain}
-              isLoading={actionPlanLoading}
-            />
-
-            <LenderMatchCard
-              match={lenderMatch}
-              isLoading={lenderMatchLoading}
-            />
-
-            <ScoreTrajectoryChart
-              trajectory={trajectory}
-              currentScore={result?.credit_score ?? null}
-              approvalThreshold={DEFAULT_APPROVAL_THRESHOLD}
-              targetScore={trajectory?.[trajectory.length - 1]?.score ?? null}
-              riskBand={result?.risk_band?.band ?? null}
-              isLoading={trajectoryLoading}
-            />
-
-            <SimilarCasesPanel cases={similarCases} isLoading={loading} />
+              <ModelMetricsPanel
+                modelVersion={result.model_version}
+                metrics={result.model_metrics}
+                backend={result.model_backend}
+              />
+            </div>
 
             {historicalPatterns.length > 0 ? (
               <HistoricalPatternCard pattern={historicalPatterns[0]} />
@@ -965,19 +733,30 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
               </Suspense>
             )}
 
+            <div className="msme-section-heading-wrap">
+              <div className="msme-section-kicker">Analyst View</div>
+              <div className="msme-section-heading">
+                Underwriting rationale, comparable cases, raw features, and fraud evidence.
+              </div>
+            </div>
+
+            <NarrativeSummary
+              isLoading={loading}
+              narrative={narrativePayload}
+              sources={sourceBundle}
+              onRegenerate={handleNarrativeRegenerate}
+              isRegenerating={narrativeRegenerating}
+            />
+
             <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Audit Trail</div><div className="msme-inline-meta">Loading decision trace...</div></div>}>
               <AuditTrailPanel entries={result.audit_trail || []} />
             </Suspense>
 
             <div className="msme-grid-2">
+              <SimilarCasesPanel cases={similarCases} isLoading={loading} />
               <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Decision Confidence</div><div className="msme-inline-meta">Loading panel...</div></div>}>
                 <ConfidencePanel confidence={result.confidence_summary} />
               </Suspense>
-              <ModelMetricsPanel
-                modelVersion={result.model_version}
-                metrics={result.model_metrics}
-                backend={result.model_backend}
-              />
             </div>
 
             <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Raw Feature Vector</div><div className="msme-inline-meta">Loading table...</div></div>}>

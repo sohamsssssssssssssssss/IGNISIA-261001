@@ -375,7 +375,7 @@ export default function ChatPanel({
     }
   };
 
-  const renderPanel = (showMobileClose: boolean) => (
+  const renderPanel = (showCloseButton: boolean) => (
     <section className={styles.panel} aria-label="AI Chat Panel">
       <header className={styles.header}>
         <div className={styles.headerLeft}>
@@ -389,11 +389,11 @@ export default function ChatPanel({
           <span className={`${styles.statusBadge} ${sessionId ? styles.statusActive : styles.statusNew}`}>
             {sessionId ? 'Active' : 'New Session'}
           </span>
-          {showMobileClose ? (
+          {showCloseButton ? (
             <button
               type="button"
               onClick={onToggle}
-              className={styles.mobileClose}
+              className={styles.closeButton}
               aria-label="Close AI panel"
             >
               <X size={18} />
@@ -516,7 +516,7 @@ export default function ChatPanel({
             </span>
           </button>
           <div className={styles.desktopPanel}>
-            {renderPanel(false)}
+            {renderPanel(true)}
           </div>
         </div>
       </div>

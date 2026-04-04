@@ -160,7 +160,7 @@ body {
   transition: padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .msme-container--chat-open {
     padding-right: 420px;
   }
@@ -193,6 +193,61 @@ body {
   margin-bottom: 16px;
 }
 
+.msme-story-banner {
+  background:
+    radial-gradient(circle at top right, rgba(200, 168, 75, 0.14), transparent 32%),
+    linear-gradient(180deg, rgba(19, 17, 14, 0.98), rgba(13, 12, 14, 0.96));
+  border: 1px solid rgba(200, 168, 75, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  padding: 24px;
+}
+
+.msme-story-banner__eyebrow {
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+.msme-story-banner__title {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.msme-story-banner__body {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.8;
+  margin-top: 12px;
+  max-width: 880px;
+}
+
+.msme-section-heading-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msme-section-kicker {
+  color: var(--gold);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.msme-section-heading {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  line-height: 1.4;
+}
+
 /* ─── Grid layouts ─── */
 .msme-grid-2 {
   display: grid;
@@ -204,6 +259,43 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
+}
+
+.msme-highlight-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.msme-highlight-card {
+  background: linear-gradient(180deg, rgba(16, 15, 17, 0.98), rgba(11, 10, 12, 0.96));
+  border: 1px solid rgba(200, 168, 75, 0.18);
+  min-height: 170px;
+  padding: 18px;
+}
+
+.msme-highlight-label {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.msme-highlight-value {
+  color: var(--text);
+  font-family: var(--serif);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 10px;
+}
+
+.msme-highlight-body {
+  color: var(--text-dim);
+  font-size: 0.88rem;
+  line-height: 1.75;
+  margin-top: 10px;
 }
 
 .msme-simulator-summary {
@@ -238,6 +330,7 @@ body {
 @media (max-width: 900px) {
   .msme-grid-2 { grid-template-columns: 1fr; }
   .msme-grid-3 { grid-template-columns: 1fr; }
+  .msme-highlight-grid { grid-template-columns: 1fr; }
   .msme-simulator-summary { grid-template-columns: 1fr; }
   .msme-simulator-plan { grid-template-columns: 1fr; }
   .msme-container { padding: 16px; }
@@ -260,6 +353,7 @@ body {
   .msme-hero-body { gap: 20px; }
   .msme-score-giant { font-size: 64px; }
   .msme-gauge-wrap { height: 130px; }
+  .msme-story-banner__title { font-size: 1.45rem; }
 }
 
 /* ─── Search bar ─── */
@@ -450,6 +544,57 @@ body {
   background: rgba(37, 160, 94, 0.1);
   border: 1px solid rgba(37, 160, 94, 0.3);
   color: var(--green);
+}
+
+.msme-proof-list {
+  display: grid;
+  gap: 12px;
+}
+
+.msme-proof-item {
+  border-left: 2px solid rgba(200, 168, 75, 0.45);
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  line-height: 1.75;
+  padding-left: 14px;
+}
+
+.msme-policy-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.msme-policy-chip {
+  align-items: center;
+  border: 1px solid var(--card-border);
+  color: var(--text-dim);
+  display: inline-flex;
+  font-family: var(--mono);
+  font-size: 10px;
+  gap: 6px;
+  letter-spacing: 0.04em;
+  padding: 8px 10px;
+}
+
+.msme-policy-chip strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.msme-policy-chip--pass {
+  background: rgba(37, 160, 94, 0.08);
+  border-color: rgba(37, 160, 94, 0.26);
+}
+
+.msme-policy-chip--fail {
+  background: rgba(200, 41, 58, 0.08);
+  border-color: rgba(200, 41, 58, 0.22);
+}
+
+.msme-policy-chip--neutral {
+  background: rgba(200, 168, 75, 0.08);
+  border-color: rgba(200, 168, 75, 0.22);
 }
 
 /* ─── Alerts ─── */

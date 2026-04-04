@@ -128,7 +128,48 @@ def _sample_score_payload():
         "risk_band": {"band": "LOW_RISK"},
         "fraud_detection": {"circular_risk": "LOW", "cycle_count": 0},
         "recommendation": {"recommended_amount": 2500000},
-        "top_reasons": [{"feature": "GST Filing Regularity", "reason": "Strong compliance", "shap_value": 0.31}],
+        "top_reasons": [
+            {
+                "feature": "GST Filing Regularity",
+                "feature_key": "gst_filing_rate",
+                "reason": "Strong compliance",
+                "shap_value": 0.31,
+            },
+            {
+                "feature": "UPI Payment Regularity",
+                "feature_key": "upi_regularity_score",
+                "reason": "Cash flow still looks uneven from week to week",
+                "shap_value": -0.21,
+            },
+        ],
+        "counterfactual_recommendations": {
+            "recommendations": [
+                {
+                    "feature_key": "upi_avg_daily_txns",
+                    "feature_name": "UPI transaction frequency",
+                    "current_value_display": "8 per day",
+                    "target_value_display": "14 per day",
+                    "estimated_score_improvement": 22,
+                    "action": "Increase your UPI transaction frequency",
+                }
+            ]
+        },
+        "score_trajectory": {
+            "target_score_day_90": 776,
+            "lender_unlock_events": [
+                {
+                    "day": 45,
+                    "lender_type": "NBFC",
+                }
+            ],
+        },
+        "lender_recommendations": {
+            "recommended_lender": {
+                "display_name": "NBFC",
+                "plain_english_reason": "your score, fraud profile, business history, and requested amount meet this tier",
+            },
+            "closest_lender": None,
+        },
     }
 
 
@@ -234,3 +275,36 @@ def test_llm_service_uses_anthropic_only_after_template_fallback(tmp_path, monke
 
     assert result["model_used"] == "claude-sonnet-4-20250514"
     assert anthropic_client.messages.calls[0]["max_tokens"] == 1000
+
+
+def test_owner_narrative_rejects_made_up_100_point_scale(tmp_path, monkeypatch):
+    db_path = tmp_path / "llm-owner-fallback.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    get_settings.cache_clear()
+    storage_module._storage = None
+    reset_database_runtime()
+
+    fallback_llm = FakeLocalFirstLLM(
+        text=(
+            "Hey friend, your business is doing well. "
+            "You can take this to 91/100 by the end of the month. "
+            "Just improve UPI activity. "
+            "You should get approved soon."
+        ),
+        source="ollama:llama3.2",
+    )
+    service = LLMService(
+        retrieval_service=FakeRetrievalService(),
+        context_builder=FakeContextBuilder(),
+        session_store=SessionStore(),
+        anthropic_client=FakeAnthropicClient(),
+        fallback_llm=fallback_llm,
+    )
+
+    result = service.generate_owner_narrative(_sample_score_payload())
+
+    assert result["model_used"] == "owner-template-fallback"
+    assert "742" in result["text"]
+    assert "NBFC" in result["text"]
+    assert "/100" not in result["text"]
