@@ -448,7 +448,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
-  const [simulation, setSimulation] = useState<any>(null);
   const [graphData, setGraphData] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [narrativeRegenerating, setNarrativeRegenerating] = useState(false);
@@ -548,17 +547,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
 
     const data = await scoreResp.json();
 
-    const simulationUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}/simulate${targetCompanyName ? `?company_name=${encodeURIComponent(targetCompanyName)}` : ''}`;
-    let simulationData = null;
-    try {
-      const simulationResp = await fetch(simulationUrl, { headers: buildHeaders() });
-      if (simulationResp.ok) {
-        simulationData = await simulationResp.json();
-      }
-    } catch (simulationError) {
-      console.warn('Simulation fetch failed', simulationError);
-    }
-
     const graphUrl = `${API_BASE}/api/v1/entity-graph/${encodeURIComponent(targetGstin)}`;
     let graphPayload = null;
     try {
@@ -570,7 +558,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
       console.warn('Entity graph fetch failed', graphError);
     }
 
-    return { data, simulationData, graphPayload };
+    return { data, graphPayload };
   };
 
   const handleScore = async (gstinOverride?: string, companyNameOverride?: string) => {
@@ -585,7 +573,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setLoading(true);
     setError(null);
     setResult(null);
-    setSimulation(null);
     setGraphData(null);
     setShowGraph(false);
     setChatOpen(false);
@@ -600,11 +587,10 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setTrajectoryLoading(true);
 
     try {
-      const { data, simulationData, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
+      const { data, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
       const nextCurrentScore = Number(data?.credit_score ?? 640);
       const nextActionPlan = buildMockActionPlan(nextCurrentScore);
       setResult(data);
-      setSimulation(simulationData);
       setGraphData(graphPayload);
       setMsmeExplanation(MOCK_MSME_EXPLANATION);
       setActionPlan(nextActionPlan);
@@ -710,7 +696,6 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setError(null);
     setGstin('');
     setCompanyName('');
-    setSimulation(null);
     setGraphData(null);
     setShowGraph(false);
     setChatOpen(false);
@@ -868,6 +853,18 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
               topReason={result.top_reasons?.[0] || null}
             />
 
+            {result.owner_narrative && (
+              <div className="msme-card">
+                <div className="msme-card-title">Owner Guidance</div>
+                <div className="msme-inline-meta" style={{ marginBottom: 12 }}>
+                  Plain-English summary for the business owner
+                </div>
+                <div style={{ color: 'var(--text)', fontSize: '1rem', lineHeight: 1.8 }}>
+                  {result.owner_narrative}
+                </div>
+              </div>
+            )}
+
             <NarrativeSummary
               isLoading={loading}
               narrative={narrativePayload}
@@ -958,9 +955,13 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
               </Suspense>
             </div>
 
-            {simulation && (
+            {result.counterfactual_recommendations && result.score_trajectory && result.lender_recommendations && (
               <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Score Improvement Simulator</div><div className="msme-inline-meta">Loading projection...</div></div>}>
-                <ScoreImprovementSimulator simulation={simulation} />
+                <ScoreImprovementSimulator
+                  counterfactual={result.counterfactual_recommendations}
+                  trajectory={result.score_trajectory}
+                  lenderRecommendations={result.lender_recommendations}
+                />
               </Suspense>
             )}
 

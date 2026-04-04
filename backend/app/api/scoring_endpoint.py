@@ -30,7 +30,9 @@ from ..core.xgboost_model import (
 )
 from ..services.feature_engineering import build_feature_vector
 from ..services.graph_serializer import serialize_graph
-from ..services.simulator import run_simulation
+from ..services.counterfactual_engine import CounterfactualEngine
+from ..services.lender_matcher import LenderMatcher
+from ..services.trajectory_projector import TrajectoryProjector
 from ..services.gst_policy import summarize_gst_amnesty_policy
 from ..services.embedding_service import get_embedding_service
 from ..services.apriori_service import get_apriori_service
@@ -158,24 +160,30 @@ def _build_score_simulation(
         company_name,
         request_id=request_id,
         persist=False,
+        include_narrative=False,
     )
-    feature_vector = dict(base_payload["feature_vector"])
-    shap_values = {
-        item["feature_key"]: float(item["shap_value"])
-        for item in base_payload["all_shap_values"]
-        if item.get("feature_key")
-    }
-
-    def _score_features(vector: Dict[str, Any]) -> int:
-        return int(get_scorer().score(vector)["credit_score"])
-
-    return run_simulation(
+    return CounterfactualEngine().generate_recommendations(
         gstin=base_payload["gstin"],
-        feature_vector=feature_vector,
-        shap_values=shap_values,
-        scorer_fn=_score_features,
-        approval_threshold=550,
+        feature_vector=dict(base_payload["feature_vector"]),
+        current_score=int(base_payload["credit_score"]),
+        model=get_scorer(),
     )
+
+
+def _resolve_requested_loan_amount(
+    explicit_loan_amount: Optional[float],
+    recommendation: Dict[str, Any],
+    features: Dict[str, float],
+) -> float:
+    if explicit_loan_amount is not None and explicit_loan_amount > 0:
+        return float(explicit_loan_amount)
+
+    recommended_amount = float(recommendation.get("recommended_amount") or 0.0)
+    if recommended_amount > 0:
+        return recommended_amount
+
+    fallback_amount = max(abs(float(features.get("upi_net_cash_flow", 0.0))) * 4.0, 100_000.0)
+    return float(round(fallback_amount, -3))
 
 
 def _parse_iso_timestamp(value: str) -> datetime:
@@ -235,6 +243,7 @@ def _score_assessment_payload(
     gstin: str,
     company_name: Optional[str] = None,
     industry_code: Optional[str] = None,
+    loan_amount: Optional[float] = None,
     *,
     request_id: Optional[str] = None,
     persist: bool = True,
@@ -422,6 +431,7 @@ def _score_assessment_payload(
     data_freshness = _build_data_freshness(pipeline_data)
     missing_streams = _derive_missing_streams(pipeline_data)
     historical_patterns: list[dict[str, Any]] = []
+    requested_loan_amount = _resolve_requested_loan_amount(loan_amount, score_result["recommendation"], features)
     gst_velocity_metrics = gst_policy.get("adjusted_metrics", {}) or pipeline_data["gst_velocity"]["velocity_metrics"]
 
     try:
@@ -453,6 +463,7 @@ def _score_assessment_payload(
         "gstin": normalized_gstin,
         "company_name": display_company_name,
         "industry_code": industry_code,
+        "requested_loan_amount": round(requested_loan_amount),
         "industry_profile": resolve_industry_profile(industry_code),
         "base_score": score_result.get("base_score"),
         "credit_score": score_result["credit_score"],
@@ -526,6 +537,36 @@ def _score_assessment_payload(
         "missing_streams": missing_streams,
         "audit_trail": audit_trail.to_list(),
     }
+
+    counterfactual_engine = CounterfactualEngine()
+    counterfactual_result = counterfactual_engine.generate_recommendations(
+        gstin=normalized_gstin,
+        feature_vector=dict(features),
+        current_score=int(score_result["credit_score"]),
+        model=scorer,
+    )
+    lender_matcher = LenderMatcher()
+    lender_recommendations = lender_matcher.match_lenders(
+        score=int(score_result["credit_score"]),
+        fraud_score=float(fraud_result.get("risk_score", 0.0)),
+        loan_amount=requested_loan_amount,
+        history_months=float(features.get("history_months_active", 0.0)),
+    )
+    score_trajectory = TrajectoryProjector(
+        counterfactual_engine=counterfactual_engine,
+        lender_matcher=lender_matcher,
+    ).project(
+        feature_vector=dict(features),
+        current_score=int(score_result["credit_score"]),
+        counterfactual_result=counterfactual_result,
+        model=scorer,
+        fraud_score=float(fraud_result.get("risk_score", 0.0)),
+        loan_amount=requested_loan_amount,
+        history_months=float(features.get("history_months_active", 0.0)),
+    )
+    payload["counterfactual_recommendations"] = counterfactual_result
+    payload["score_trajectory"] = score_trajectory
+    payload["lender_recommendations"] = lender_recommendations
 
     logger.info(
         json.dumps(
@@ -602,6 +643,14 @@ def _score_assessment_payload(
             payload["narrative_text"] = None
             payload["narrative_sources"] = []
             payload["narrative_model_used"] = None
+        try:
+            owner_narrative = get_llm_service().generate_owner_narrative(payload)
+            payload["owner_narrative"] = owner_narrative["text"]
+            payload["owner_narrative_model_used"] = owner_narrative["model_used"]
+        except Exception:
+            logger.exception("Owner narrative generation failed for GSTIN %s", normalized_gstin)
+            payload["owner_narrative"] = None
+            payload["owner_narrative_model_used"] = None
     return payload
 
 
@@ -690,12 +739,14 @@ async def score_msme(
     request: Request,
     company_name: Optional[str] = Query(None, description="Optional company name for export and display"),
     industry_code: Optional[str] = Query(None, description="Optional NIC industry code for industry-aware recommendation logic"),
+    loan_amount: Optional[float] = Query(None, gt=0, description="Optional requested loan amount in rupees for lender matching"),
     _: Any = Depends(require_role("viewer")),
 ) -> Dict[str, Any]:
     return _score_assessment_payload(
         gstin,
         company_name,
         industry_code,
+        loan_amount,
         request_id=getattr(request.state, "request_id", None),
         persist=True,
     )
@@ -806,12 +857,12 @@ async def get_score_history(
 
 @router.get(
     "/score/{gstin}/simulate",
-    summary="Project score improvement over 6 months",
+    summary="Generate actionable counterfactual recommendations",
     response_model=SimulationResponse,
 )
 @router.get(
     "/v1/score/{gstin}/simulate",
-    summary="Project score improvement over 6 months (v1)",
+    summary="Generate actionable counterfactual recommendations (v1)",
     response_model=SimulationResponse,
 )
 async def simulate_score_improvement(

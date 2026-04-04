@@ -11,6 +11,9 @@ from app.core.settings import get_settings
 from app.core import storage as storage_module
 from app.core.storage import get_storage
 from app.core.xgboost_model import get_scorer, recommend_loan, reset_scorer
+from app.services.counterfactual_engine import CounterfactualEngine
+from app.services.lender_matcher import LenderMatcher
+from app.services.trajectory_projector import TrajectoryProjector
 from app.services.feature_engineering import POPULATION_DEFAULTS, _confidence_weight
 
 
@@ -123,7 +126,7 @@ def secured_client(tmp_path, monkeypatch):
 
 def test_score_endpoint_returns_expected_contract(client):
     _hydrate_demo_data()
-    response = client.post("/api/v1/score/29CLEAN5678B1Z2")
+    response = client.post("/api/v1/score/29CLEAN5678B1Z2?loan_amount=300000")
     assert response.status_code == 200
 
     payload = response.json()
@@ -154,6 +157,18 @@ def test_score_endpoint_returns_expected_contract(client):
     assert abs(payload["default_probability"] - (1 - payload["probability"])) < 1e-6
     assert "recommendation_basis" in payload["recommendation"]
     assert "industry_profile" in payload["recommendation"]
+    assert payload["requested_loan_amount"] == 300000
+    assert payload["counterfactual_recommendations"]["gstin"] == payload["gstin"]
+    assert "recommendations" in payload["counterfactual_recommendations"]
+    assert payload["counterfactual_recommendations"]["combined_projected_score"] >= payload["counterfactual_recommendations"]["base_score"]
+    assert payload["score_trajectory"]["current_score"] == payload["credit_score"]
+    assert [point["day"] for point in payload["score_trajectory"]["with_action"]] == [0, 30, 60, 90]
+    assert [point["day"] for point in payload["score_trajectory"]["no_action"]] == [0, 30, 60, 90]
+    assert payload["score_trajectory"]["target_score_day_90"] >= payload["credit_score"]
+    assert payload["lender_recommendations"]["requested_loan_amount"] == 300000
+    assert len(payload["lender_recommendations"]["all_lenders"]) == 4
+    assert isinstance(payload["owner_narrative"], str)
+    assert len(payload["owner_narrative"].split(".")) >= 3
 
 
 def test_sparse_scenario_sets_sparse_flag_and_short_history(client):
@@ -500,13 +515,156 @@ def test_simulate_endpoint_returns_projection(client):
 
     payload = response.json()
     assert payload["gstin"] == "27ARJUN1234A1Z5"
-    assert len(payload["trajectory"]) == 6
-    assert payload["trajectory"][0]["month"] == 1
-    assert payload["trajectory"][-1]["month"] == 6
-    assert len(payload["top_issues"]) >= 1
-    assert payload["approval_threshold"] == 550
-    assert "base_score" in payload
-    assert "final_eligible_amount" in payload
+    assert payload["combined_projected_score"] >= payload["base_score"]
+    assert payload["combined_score_improvement"] >= 0
+    assert payload["naive_sum_score_improvement"] >= payload["combined_score_improvement"]
+    assert len(payload["recommendations"]) >= 1
+    top = payload["recommendations"][0]
+    assert "feature_name" in top
+    assert "current_value_display" in top
+    assert "target_value_display" in top
+    assert top["estimated_score_improvement"] > 0
+    assert top["confidence"] in {"high", "medium"}
+    assert top["timeframe_days"]
+
+
+def test_counterfactual_engine_recommends_gst_filing_rate_and_manual_rescore_matches_delta():
+    scorer = get_scorer()
+    engine = CounterfactualEngine()
+    feature_vector = {
+        "gst_filing_rate": 0.67,
+        "gst_avg_delay_days": 8.03,
+        "gst_on_time_pct": 60.72,
+        "gst_e_invoice_velocity": 15.67,
+        "gst_e_invoice_trend": 1.0,
+        "gst_itc_variance_avg": 13.92,
+        "gst_itc_variance_trend": 0.161,
+        "upi_avg_daily_txns": 2.5,
+        "upi_regularity_score": 36.6,
+        "upi_inflow_outflow_ratio": 0.896,
+        "upi_round_amount_pct": 19.91,
+        "upi_net_cash_flow": -25000.0,
+        "upi_counterparty_diversity": 0.87,
+        "upi_volume_growth": 2.37,
+        "eway_avg_monthly_bills": 8.61,
+        "eway_volume_momentum": -3.1,
+        "eway_mom_growth": -7.74,
+        "eway_interstate_ratio": 26.53,
+        "eway_cancellation_rate": 11.87,
+        "eway_avg_bill_value": 215039.0,
+        "history_months_active": 8.58,
+        "overall_data_confidence": 0.83,
+    }
+    feature_vector["gst_filing_history_interaction"] = round(
+        feature_vector["gst_filing_rate"] * feature_vector["history_months_active"],
+        4,
+    )
+    feature_vector["upi_regularity_history_interaction"] = round(
+        feature_vector["upi_regularity_score"] * feature_vector["history_months_active"],
+        4,
+    )
+
+    current_score = scorer.predict_credit_score(feature_vector)
+    result = engine.generate_recommendations(
+        gstin="27VERIFYGSTIN1Z5",
+        feature_vector=feature_vector,
+        current_score=current_score,
+        model=scorer,
+    )
+
+    assert current_score == 614
+    assert result["recommendations"][0]["feature_key"] == "gst_filing_rate"
+
+    recommendation = result["recommendations"][0]
+    recommended_vector = engine._apply_feature_change(
+        feature_vector,
+        recommendation["feature_key"],
+        recommendation["target_value"],
+    )
+    rescored = scorer.predict_credit_score(recommended_vector)
+    stated_projection = current_score + recommendation["estimated_score_improvement"]
+
+    assert abs(rescored - stated_projection) <= 5
+
+
+def test_lender_matcher_groups_qualified_and_borderline_lenders():
+    matcher = LenderMatcher()
+
+    result = matcher.match_lenders(
+        score=690,
+        fraud_score=30,
+        loan_amount=250000,
+        history_months=5,
+    )
+
+    assert result["recommended_lender"]["key"] == "mfi"
+    assert any(lender["key"] == "nbfc" for lender in result["borderline_lenders"])
+    nbfc = next(lender for lender in result["borderline_lenders"] if lender["key"] == "nbfc")
+    assert "1 more months of history" in nbfc["gap_statement"]
+    assert any(lender["key"] == "commercial_bank" for lender in result["not_yet_accessible_lenders"])
+
+
+def test_trajectory_projector_returns_curves_and_unlock_events():
+    scorer = get_scorer()
+    engine = CounterfactualEngine()
+    projector = TrajectoryProjector(counterfactual_engine=engine)
+    feature_vector = {
+        "gst_filing_rate": 0.67,
+        "gst_avg_delay_days": 8.03,
+        "gst_on_time_pct": 60.72,
+        "gst_e_invoice_velocity": 15.67,
+        "gst_e_invoice_trend": 1.0,
+        "gst_itc_variance_avg": 13.92,
+        "gst_itc_variance_trend": 0.161,
+        "upi_avg_daily_txns": 2.5,
+        "upi_regularity_score": 36.6,
+        "upi_inflow_outflow_ratio": 0.896,
+        "upi_round_amount_pct": 19.91,
+        "upi_net_cash_flow": -25000.0,
+        "upi_counterparty_diversity": 0.87,
+        "upi_volume_growth": 2.37,
+        "eway_avg_monthly_bills": 8.61,
+        "eway_volume_momentum": -3.1,
+        "eway_mom_growth": -7.74,
+        "eway_interstate_ratio": 26.53,
+        "eway_cancellation_rate": 11.87,
+        "eway_avg_bill_value": 215039.0,
+        "history_months_active": 5.2,
+        "overall_data_confidence": 0.83,
+    }
+    feature_vector["gst_filing_history_interaction"] = round(
+        feature_vector["gst_filing_rate"] * feature_vector["history_months_active"],
+        4,
+    )
+    feature_vector["upi_regularity_history_interaction"] = round(
+        feature_vector["upi_regularity_score"] * feature_vector["history_months_active"],
+        4,
+    )
+    current_score = scorer.predict_credit_score(feature_vector)
+    counterfactual = engine.generate_recommendations(
+        gstin="27VERIFYGSTIN1Z5",
+        feature_vector=feature_vector,
+        current_score=current_score,
+        model=scorer,
+    )
+
+    result = projector.project(
+        feature_vector=feature_vector,
+        current_score=current_score,
+        counterfactual_result=counterfactual,
+        model=scorer,
+        fraud_score=20,
+        loan_amount=250000,
+        history_months=feature_vector["history_months_active"],
+    )
+
+    assert [point["day"] for point in result["with_action"]] == [0, 30, 60, 90]
+    assert [point["day"] for point in result["no_action"]] == [0, 30, 60, 90]
+    assert result["with_action"][0]["score"] == current_score
+    assert result["target_score_day_90"] == result["with_action"][-1]["score"]
+    assert result["target_score_day_90"] >= current_score
+    assert result["no_action"][-1]["score"] == current_score + 6
+    assert any(event["lender_key"] == "mfi" for event in result["lender_unlock_events"])
 
 
 def test_refresh_endpoint_updates_pipeline_timestamp(client):

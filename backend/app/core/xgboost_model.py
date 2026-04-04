@@ -1596,6 +1596,21 @@ class MSMECreditScorer:
             "shap_available": self.explainer is not None,
         }
 
+    def predict_credit_score(self, features: Dict[str, float]) -> int:
+        feature_array = np.array([[features.get(name, 0.0) for name in FEATURE_NAMES]])
+
+        if self.model is None or self.explainer is None:
+            return int(self._fallback_score(features)["credit_score"])
+
+        if self.backend == "xgboost":
+            dmatrix = xgb.DMatrix(feature_array, feature_names=FEATURE_NAMES)
+            raw_prob = float(self.model.predict(dmatrix)[0])
+        else:
+            raw_prob = float(self.model.predict_proba(feature_array)[0][1])
+
+        _, calibrated_prob = self._calibration_details(raw_prob)
+        return _map_probability_to_score(calibrated_prob)
+
     def score(self, features: Dict[str, float]) -> Dict[str, Any]:
         feature_array = np.array([[features.get(name, 0.0) for name in FEATURE_NAMES]])
 

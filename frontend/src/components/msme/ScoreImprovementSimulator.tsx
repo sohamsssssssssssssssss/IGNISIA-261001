@@ -10,150 +10,321 @@ import {
   YAxis,
 } from 'recharts';
 
-interface ProjectionPoint {
-  month: number;
-  score: number;
-  actions: string[];
-  crosses_threshold: boolean;
+interface CounterfactualRecommendation {
+  feature_key: string;
+  feature_name: string;
+  current_value: number;
+  current_value_display: string;
+  target_value: number;
+  target_value_display: string;
+  estimated_score_improvement: number;
+  confidence: 'high' | 'medium';
+  action: string;
+  timeframe_days: string;
 }
 
-interface TopIssue {
-  feature: string;
-  label: string;
-  shap_impact: number;
+interface CounterfactualPayload {
+  base_score: number;
+  combined_projected_score: number;
+  combined_score_improvement: number;
+  naive_sum_score_improvement: number;
+  recommendations: CounterfactualRecommendation[];
+}
+
+interface TrajectoryPoint {
+  day: number;
+  score: number;
+}
+
+interface LenderUnlockEvent {
+  day: number;
+  lender_key: string;
+  lender_type: string;
+  message: string;
+}
+
+interface LenderItem {
+  key: string;
+  display_name: string;
+  status: 'qualified' | 'borderline' | 'not_qualified';
+  gap_statement: string;
+  plain_english_reason: string;
+  typical_interest_rate_range: string;
+  typical_processing_time_days: number;
+  notes: string;
+}
+
+interface TrajectoryPayload {
+  current_score: number;
+  with_action: TrajectoryPoint[];
+  no_action: TrajectoryPoint[];
+  target_score_day_90: number;
+  lender_unlock_events: LenderUnlockEvent[];
+}
+
+interface LenderRecommendationsPayload {
+  requested_loan_amount: number;
+  summary: string;
+  recommended_lender: LenderItem | null;
+  closest_lender: LenderItem | null;
+  all_lenders: LenderItem[];
 }
 
 interface SimulatorProps {
-  simulation: {
-    base_score: number;
-    approval_threshold: number;
-    crossed_threshold_month: number | null;
-    trajectory: ProjectionPoint[];
-    top_issues: TopIssue[];
-    final_eligible_amount: number;
-  };
+  counterfactual: CounterfactualPayload;
+  trajectory: TrajectoryPayload;
+  lenderRecommendations: LenderRecommendationsPayload;
 }
 
-function formatINR(amount: number): string {
-  if (amount >= 10000000) return `${(amount / 10000000).toFixed(1)} Cr`;
-  if (amount >= 100000) return `${(amount / 100000).toFixed(1)} L`;
-  return amount.toLocaleString('en-IN');
+function buildChartData(trajectory: TrajectoryPayload) {
+  const passiveByDay = new Map(trajectory.no_action.map((point) => [point.day, point.score]));
+  return trajectory.with_action.map((point) => ({
+    day: point.day,
+    actionScore: point.score,
+    passiveScore: passiveByDay.get(point.day) ?? point.score,
+  }));
 }
 
-export const ScoreImprovementSimulator: React.FC<SimulatorProps> = ({ simulation }) => {
-  if (simulation.base_score >= simulation.approval_threshold) {
+function computeYDomain(counterfactual: CounterfactualPayload, trajectory: TrajectoryPayload): [number, number] {
+  const scores = [
+    counterfactual.base_score,
+    counterfactual.combined_projected_score,
+    ...trajectory.with_action.map((point) => point.score),
+    ...trajectory.no_action.map((point) => point.score),
+  ];
+  const lower = Math.max(300, Math.floor((Math.min(...scores) - 20) / 10) * 10);
+  const upper = Math.min(900, Math.ceil((Math.max(...scores) + 20) / 10) * 10);
+  return [lower, upper];
+}
+
+function formatCurrency(value: number): string {
+  return `INR ${value.toLocaleString('en-IN')}`;
+}
+
+export const ScoreImprovementSimulator: React.FC<SimulatorProps> = ({
+  counterfactual,
+  trajectory,
+  lenderRecommendations,
+}) => {
+  if (!counterfactual.recommendations?.length) {
     return null;
   }
 
-  const chartData = [
-    { month: 'Now', score: simulation.base_score, action: 'Current score', crossesThreshold: false },
-    ...simulation.trajectory.map((point) => ({
-      month: `M${point.month}`,
-      score: point.score,
-      action: point.actions[0] || 'Continued improvement',
-      crossesThreshold: point.crosses_threshold,
-    })),
-  ];
+  const projectionDirection = counterfactual.combined_score_improvement >= 0 ? '+' : '';
+  const chartData = buildChartData(trajectory);
+  const [yMin, yMax] = computeYDomain(counterfactual, trajectory);
+  const roadmapLender = lenderRecommendations.recommended_lender ?? lenderRecommendations.closest_lender;
 
   return (
     <div className="msme-card">
-      <div className="msme-card-title">Score Improvement Simulator</div>
+      <div className="msme-card-title">Counterfactual Action Plan</div>
       <div className="msme-inline-meta" style={{ marginBottom: 16 }}>
-        6-month rehabilitation projection based on improving the top negative SHAP drivers
+        Ranked feature changes from rerunning the model after nudging one actionable signal at a time
       </div>
 
-      <ResponsiveContainer width="100%" height={240}>
-        <LineChart data={chartData} margin={{ top: 10, right: 16, left: 8, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" />
-          <XAxis
-            dataKey="month"
-            tick={{ fill: '#9A9488', fontSize: 9, fontFamily: 'IBM Plex Mono' }}
-            axisLine={{ stroke: 'var(--card-border)' }}
-            tickLine={false}
-          />
-          <YAxis
-            domain={[300, 900]}
-            ticks={[300, 500, 600, 700, 800, 900]}
-            tick={{ fill: '#9A9488', fontSize: 9, fontFamily: 'IBM Plex Mono' }}
-            axisLine={{ stroke: 'var(--card-border)' }}
-            tickLine={false}
-          />
-          <Tooltip
-            contentStyle={{
-              background: '#111012',
-              border: '1px solid #1E1D1F',
-              color: '#EDE5D4',
-              fontFamily: 'IBM Plex Mono',
-              fontSize: '11px',
-            }}
-            formatter={(value: number, _name, props: any) => [`Score: ${value}`, props?.payload?.action || '']}
-            labelFormatter={(label: string, payload: any[]) => {
-              const point = payload?.[0]?.payload;
-              return point ? `${label} — ${point.action}` : label;
-            }}
-          />
-          <ReferenceLine
-            y={simulation.approval_threshold}
-            stroke="#25A05E"
-            strokeDasharray="4 4"
-            label={{ value: 'Eligibility', position: 'insideTopRight', fill: '#25A05E', fontSize: 10 }}
-          />
-          <Line
-            type="monotone"
-            dataKey="score"
-            stroke="#C8A84B"
-            strokeWidth={2}
-            dot={(props: any) => {
-              const { payload, cx, cy } = props;
-              return payload?.crossesThreshold
-                ? <circle cx={cx} cy={cy} r={7} fill="#25A05E" />
-                : <circle cx={cx} cy={cy} r={4} fill="#C8A84B" />;
-            }}
-            activeDot={{ r: 5, fill: '#C8A84B', stroke: '#EDE5D4', strokeWidth: 1 }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-
-      <div className="msme-simulator-summary">
+      <div className="msme-grid-2" style={{ marginBottom: 18 }}>
         <div className="msme-metric-card">
           <div className="msme-metric-label">Current Score</div>
-          <div className="msme-metric-value">{simulation.base_score}</div>
+          <div className="msme-metric-value">{counterfactual.base_score}</div>
         </div>
         <div className="msme-metric-card">
-          <div className="msme-metric-label">Approval Crossing</div>
-          <div className="msme-metric-value" style={{ color: simulation.crossed_threshold_month ? 'var(--green)' : 'var(--amber)' }}>
-            {simulation.crossed_threshold_month ? `Month ${simulation.crossed_threshold_month}` : 'Not in 6mo'}
+          <div className="msme-metric-label">Combined Projection</div>
+          <div className="msme-metric-value" style={{ color: 'var(--gold)' }}>
+            {counterfactual.combined_projected_score}
+          </div>
+          <div className="msme-inline-meta" style={{ marginTop: 6 }}>
+            {projectionDirection}{counterfactual.combined_score_improvement} points after applying the top actions together
           </div>
         </div>
       </div>
 
-      <div className="msme-simulator-plan">
-        {simulation.top_issues.map((step) => (
-          <div key={step.feature} className="msme-simulator-step">
-            <div className="msme-simulator-step-title">{step.label}</div>
-            <div className="msme-inline-meta">
-              Impact: {Math.abs(step.shap_impact).toFixed(2)}
+      <div className="msme-alert msme-alert--warning" style={{ marginBottom: 18 }}>
+        Individual lifts show what to tackle first. The headline projection is recalculated with all recommended changes applied together to account for model interactions.
+      </div>
+
+      <div style={{ display: 'grid', gap: 14 }}>
+        {counterfactual.recommendations.map((recommendation, index) => (
+          <div key={recommendation.feature_key} className="msme-metric-card" style={{ textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+              <div>
+                <div className="msme-metric-label">Priority {index + 1}</div>
+                <div className="msme-card-title" style={{ marginTop: 6 }}>{recommendation.feature_name}</div>
+              </div>
+              <div
+                className={`msme-badge ${recommendation.confidence === 'high' ? 'msme-badge--success' : 'msme-badge--warning'}`}
+                style={{ textTransform: 'uppercase' }}
+              >
+                {recommendation.confidence} confidence
+              </div>
+            </div>
+
+            <div className="msme-grid-2" style={{ marginTop: 14 }}>
+              <div>
+                <div className="msme-inline-meta">Current</div>
+                <div style={{ color: 'var(--text)', fontSize: '1rem' }}>{recommendation.current_value_display}</div>
+              </div>
+              <div>
+                <div className="msme-inline-meta">Target</div>
+                <div style={{ color: 'var(--gold)', fontSize: '1rem' }}>{recommendation.target_value_display}</div>
+              </div>
+            </div>
+
+            <div className="msme-grid-2" style={{ marginTop: 14 }}>
+              <div>
+                <div className="msme-inline-meta">Estimated Score Lift</div>
+                <div style={{ color: 'var(--green)', fontSize: '1rem' }}>
+                  +{recommendation.estimated_score_improvement} pts
+                </div>
+              </div>
+              <div>
+                <div className="msme-inline-meta">Timeframe</div>
+                <div style={{ color: 'var(--text)', fontSize: '1rem' }}>{recommendation.timeframe_days} days</div>
+              </div>
+            </div>
+
+            <div style={{ color: 'var(--text-dim)', fontSize: 13, lineHeight: 1.7, marginTop: 14 }}>
+              {recommendation.action}
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ marginTop: 16 }}>
-        {simulation.trajectory.map((point) => (
-          <div key={point.month} className="msme-signal-row">
-            <span className="msme-signal-key">Month {point.month}: {point.actions[0] || 'Continued improvement'}</span>
-            <span className="msme-signal-val">
-              {point.score} {point.crosses_threshold ? '• Crosses threshold' : ''}
-            </span>
-          </div>
-        ))}
+      <div style={{ marginTop: 24 }}>
+        <div className="msme-card-title">30 / 60 / 90 Day Score Trajectory</div>
+        <div className="msme-inline-meta" style={{ marginBottom: 12 }}>
+          Action path vs passive drift, with lender tier unlock markers
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={chartData} margin={{ top: 10, right: 18, left: 8, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--card-border)" />
+            <XAxis
+              dataKey="day"
+              type="number"
+              domain={[0, 90]}
+              ticks={[0, 30, 60, 90]}
+              tick={{ fill: '#9A9488', fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+              axisLine={{ stroke: 'var(--card-border)' }}
+              tickLine={false}
+              label={{ value: 'Day', position: 'insideBottom', offset: -4, fill: '#9A9488', fontSize: 10 }}
+            />
+            <YAxis
+              domain={[yMin, yMax]}
+              tick={{ fill: '#9A9488', fontSize: 9, fontFamily: 'IBM Plex Mono' }}
+              axisLine={{ stroke: 'var(--card-border)' }}
+              tickLine={false}
+            />
+            {trajectory.lender_unlock_events.map((event) => (
+              <ReferenceLine
+                key={`${event.lender_key}-${event.day}`}
+                x={event.day}
+                stroke="rgba(200, 168, 75, 0.45)"
+                strokeDasharray="4 4"
+                label={{
+                  value: `${event.lender_type} unlock`,
+                  fill: '#C8A84B',
+                  fontSize: 10,
+                  position: 'insideTopRight',
+                }}
+              />
+            ))}
+            <Tooltip
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const unlocks = trajectory.lender_unlock_events
+                  .filter((event) => event.day === Number(label))
+                  .map((event) => event.message);
+
+                return (
+                  <div className="msme-chart-tooltip">
+                    <div>Day {label}</div>
+                    {payload.map((entry) => (
+                      <div key={String(entry.dataKey)}>
+                        {entry.name}: {entry.value}
+                      </div>
+                    ))}
+                    {unlocks.map((message) => (
+                      <div key={message}>{message}</div>
+                    ))}
+                  </div>
+                );
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="actionScore"
+              name="With action"
+              stroke="#C8A84B"
+              strokeWidth={3}
+              dot={{ fill: '#C8A84B', r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: '#C8A84B', stroke: '#EDE5D4', strokeWidth: 1 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="passiveScore"
+              name="No action"
+              stroke="rgba(154, 148, 136, 0.9)"
+              strokeWidth={2}
+              dot={{ fill: 'rgba(154, 148, 136, 0.9)', r: 2, strokeWidth: 0 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+        <div className="msme-inline-meta" style={{ marginTop: 10 }}>
+          Day 90 target with action: {trajectory.target_score_day_90}. Naive sum of individual lifts: +{counterfactual.naive_sum_score_improvement} pts.
+        </div>
       </div>
 
-      {simulation.crossed_threshold_month && (
-        <div className="msme-alert msme-alert--success" style={{ marginTop: 16 }}>
-          You cross the approval threshold by Month {simulation.crossed_threshold_month}. At 6 months: eligible for up to {formatINR(simulation.final_eligible_amount)}.
+      <div style={{ marginTop: 24 }}>
+        <div className="msme-card-title">Lender Roadmap</div>
+        <div className="msme-inline-meta" style={{ marginBottom: 12 }}>
+          Requested amount assumed: {formatCurrency(lenderRecommendations.requested_loan_amount)}
         </div>
-      )}
+
+        <div className="msme-metric-card" style={{ textAlign: 'left', marginBottom: 16 }}>
+          <div className="msme-inline-meta">Best current direction</div>
+          <div style={{ color: 'var(--text)', fontSize: '1rem', lineHeight: 1.7, marginTop: 8 }}>
+            {lenderRecommendations.summary}
+          </div>
+          {roadmapLender && (
+            <div style={{ color: 'var(--text-dim)', fontSize: 13, lineHeight: 1.7, marginTop: 10 }}>
+              {roadmapLender.display_name}: {roadmapLender.typical_interest_rate_range}, usually about {roadmapLender.typical_processing_time_days} days. {roadmapLender.notes}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gap: 12 }}>
+          {lenderRecommendations.all_lenders.map((lender) => (
+            <div key={lender.key} className="msme-metric-card" style={{ textAlign: 'left' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                <div>
+                  <div className="msme-card-title" style={{ marginTop: 0 }}>{lender.display_name}</div>
+                  <div className="msme-inline-meta" style={{ marginTop: 6 }}>
+                    {lender.typical_interest_rate_range} • ~{lender.typical_processing_time_days} days
+                  </div>
+                </div>
+                <div
+                  className={`msme-badge ${
+                    lender.status === 'qualified'
+                      ? 'msme-badge--success'
+                      : lender.status === 'borderline'
+                        ? 'msme-badge--warning'
+                        : 'msme-badge--danger'
+                  }`}
+                  style={{ textTransform: 'uppercase' }}
+                >
+                  {lender.status.replace('_', ' ')}
+                </div>
+              </div>
+
+              <div style={{ color: 'var(--text)', fontSize: '0.95rem', lineHeight: 1.7, marginTop: 12 }}>
+                {lender.gap_statement}
+              </div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 13, lineHeight: 1.7, marginTop: 10 }}>
+                {lender.plain_english_reason}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
