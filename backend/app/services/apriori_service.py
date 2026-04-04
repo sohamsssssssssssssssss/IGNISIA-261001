@@ -362,12 +362,12 @@ class AprioriService:
         return "repaid" if credit_score >= CREDIT_MEDIUM_SCORE_THRESHOLD else "defaulted"
 
     def _ensure_outcome_labels(self) -> int:
-        labeled_count = self.storage.count_distinct_outcome_labeled_gstins()
+        labeled_count = self.storage.count_outcome_labeled_records()
         if labeled_count >= MIN_OUTCOME_LABELED_RECORDS:
             return labeled_count
         seed_status = self.storage.ensure_mock_loan_outcomes_for_latest_assessments()
         logger.info("Apriori mock outcome seeding complete: %s", seed_status)
-        return self.storage.count_distinct_outcome_labeled_gstins()
+        return self.storage.count_outcome_labeled_records()
 
     def _rule_id(self, antecedents: List[str], consequent: str) -> str:
         digest = hashlib.sha1(

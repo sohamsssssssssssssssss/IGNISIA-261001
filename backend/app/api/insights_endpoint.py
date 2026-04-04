@@ -56,7 +56,8 @@ async def get_behavioral_rules(
         "rules": filtered,
         "metadata": {
             "assessment_count": service.storage.count_assessments(),
-            "outcome_labeled_count": service.storage.count_distinct_outcome_labeled_gstins(),
+            "outcome_labeled_count": service.storage.count_outcome_labeled_records(),
+            "outcome_labeled_gstins": service.storage.count_distinct_outcome_labeled_gstins(),
             "required_assessments": 50,
             "last_updated": service.get_cache_metadata().get("generated_at"),
             "not_enough_data": not minimum,

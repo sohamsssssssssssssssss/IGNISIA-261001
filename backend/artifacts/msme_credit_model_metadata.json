@@ -1,7 +1,7 @@
 {
-  "model_version": "xgb-msme-v12.0-20260403111229",
+  "model_version": "xgb-msme-v12.0-20260404070942",
   "backend": "xgboost",
-  "trained_at": "2026-04-03T11:12:29.725214Z",
+  "trained_at": "2026-04-04T07:09:42.389008Z",
   "feature_names": [
     "gst_filing_rate",
     "gst_avg_delay_days",
@@ -179,6 +179,7 @@
   "calibration_method": "isotonic_regression_tail_regularized",
   "score_mapping": "non_linear_power_curve_1.1",
   "calibration_curve_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_calibration_curve.json",
+  "population_base_score": 591,
   "model_artifact_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_xgb.json",
   "calibration_artifact_path": "/Users/atharva/Intelli-Credit/backend/artifacts/msme_credit_calibrator.pkl"
 }

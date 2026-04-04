@@ -73,7 +73,11 @@ class DocumentIndexer:
         self._backend = "memory"
         self.index = None
 
-        if HAS_LLAMA_INDEX and collection is not None:
+        if (
+            HAS_LLAMA_INDEX
+            and collection is not None
+            and getattr(collection, "fallback_backend", None) != "memory"
+        ):
             try:
                 vector_store = ChromaVectorStore(chroma_collection=collection)
                 storage_context = StorageContext.from_defaults(vector_store=vector_store)

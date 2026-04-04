@@ -782,6 +782,9 @@ class ScoreStorage:
             count = session.scalar(select(func.count()).select_from(LoanOutcomeRecord))
         return int(count or 0)
 
+    def count_outcome_labeled_records(self) -> int:
+        return self.count_loan_outcomes()
+
     def count_distinct_outcome_labeled_gstins(self) -> int:
         with session_scope() as session:
             count = session.scalar(select(func.count(func.distinct(LoanOutcomeRecord.gstin))))
@@ -816,16 +819,39 @@ class ScoreStorage:
         ]
 
     def ensure_mock_loan_outcomes_for_latest_assessments(self) -> Dict[str, Any]:
-        latest_assessments = self.list_latest_assessments()
-        existing_by_gstin = {
-            outcome["gstin"]: outcome
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    ScoreAssessmentRecord.gstin,
+                    ScoreAssessmentRecord.company_name,
+                    ScoreAssessmentRecord.credit_score,
+                    ScoreAssessmentRecord.model_version,
+                    ScoreAssessmentRecord.created_at,
+                    ScoreAssessmentRecord.recommendation_json,
+                ).order_by(ScoreAssessmentRecord.created_at.asc())
+            ).all()
+
+        assessment_history = [
+            {
+                "gstin": row.gstin,
+                "company_name": row.company_name,
+                "credit_score": row.credit_score,
+                "model_version": row.model_version,
+                "created_at": row.created_at,
+                "recommendation": json.loads(row.recommendation_json or "{}"),
+            }
+            for row in rows
+        ]
+        existing_keys = {
+            (outcome["gstin"], outcome["recorded_at"])
             for outcome in self.get_loan_outcomes()
         }
 
         seeded = 0
-        for assessment in latest_assessments:
+        for assessment in assessment_history:
             gstin = assessment["gstin"]
-            if gstin in existing_by_gstin:
+            outcome_key = (gstin, assessment.get("created_at"))
+            if outcome_key in existing_keys:
                 continue
 
             credit_score = float(assessment.get("credit_score") or 0.0)
@@ -853,6 +879,7 @@ class ScoreStorage:
                 feature_snapshot={},
             )
             seeded += 1
+            existing_keys.add(outcome_key)
 
         return {
             "seeded": seeded,
@@ -860,17 +887,44 @@ class ScoreStorage:
         }
 
     def get_rule_mining_records(self) -> List[Dict[str, Any]]:
-        latest_assessments = {
-            assessment["gstin"]: assessment
-            for assessment in self.list_latest_assessments()
-        }
-        fraud_alerts = {
-            gstin: self.get_latest_fraud_alert(gstin)
-            for gstin in latest_assessments
-        }
+        with session_scope() as session:
+            assessment_rows = session.execute(
+                select(
+                    ScoreAssessmentRecord.gstin,
+                    ScoreAssessmentRecord.company_name,
+                    ScoreAssessmentRecord.credit_score,
+                    ScoreAssessmentRecord.risk_band,
+                    ScoreAssessmentRecord.fraud_risk,
+                    ScoreAssessmentRecord.model_version,
+                    ScoreAssessmentRecord.industry_code,
+                    ScoreAssessmentRecord.months_active,
+                    ScoreAssessmentRecord.created_at,
+                ).order_by(ScoreAssessmentRecord.created_at.asc())
+            ).all()
+
+        assessments_by_key: Dict[tuple[str, str], Dict[str, Any]] = {}
+        latest_assessments: Dict[str, Dict[str, Any]] = {}
+        for row in assessment_rows:
+            assessment = {
+                "gstin": row.gstin,
+                "company_name": row.company_name,
+                "credit_score": row.credit_score,
+                "risk_band": row.risk_band,
+                "fraud_risk": row.fraud_risk,
+                "model_version": row.model_version,
+                "industry_code": row.industry_code,
+                "months_active": row.months_active,
+                "created_at": row.created_at,
+            }
+            assessments_by_key[(row.gstin, row.created_at)] = assessment
+            latest_assessments[row.gstin] = assessment
+
+        fraud_alerts = {gstin: self.get_latest_fraud_alert(gstin) for gstin in latest_assessments}
         records: List[Dict[str, Any]] = []
         for outcome in self.get_loan_outcomes():
-            assessment = latest_assessments.get(outcome["gstin"])
+            assessment = assessments_by_key.get((outcome["gstin"], outcome["recorded_at"]))
+            if assessment is None:
+                assessment = latest_assessments.get(outcome["gstin"])
             if assessment is None:
                 continue
             pipeline_data = self.get_pipeline_data(outcome["gstin"])

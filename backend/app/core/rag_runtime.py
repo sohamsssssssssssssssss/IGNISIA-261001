@@ -40,7 +40,12 @@ def get_rag_capabilities() -> Dict[str, Any]:
     web_intel_enabled = rag_enabled and _env_enabled("ENABLE_WEB_INTEL", default=True)
     local_generation_enabled = rag_enabled and _env_enabled("ENABLE_LOCAL_GENERATION", default=True)
 
-    chroma_available = get_chroma_client() is not None
+    vector_store_client = get_chroma_client()
+    vector_store_available = vector_store_client is not None
+    vector_store_backend = "unavailable"
+    if vector_store_client is not None:
+        vector_store_backend = getattr(vector_store_client, "backend", "chroma")
+    chroma_available = vector_store_backend == "chroma"
     llama_index_available = (
         _has_module("llama_index")
         or (_has_module("llama_index.core") and _has_module("llama_index.vector_stores.chroma"))
@@ -53,8 +58,8 @@ def get_rag_capabilities() -> Dict[str, Any]:
     generation_ready = local_generation_enabled and ollama_package_available
     web_intel_ready = web_intel_enabled and tavily_package_available and bool(os.getenv("TAVILY_API_KEY"))
     degradations = []
-    if base_pipeline_ready and not chroma_available:
-        degradations.append("vector_store_fallback_active")
+    if base_pipeline_ready and not vector_store_available:
+        degradations.append("vector_store_unavailable")
     if base_pipeline_ready and not generation_ready:
         degradations.append("local_generation_unavailable")
     if base_pipeline_ready and not web_intel_ready:
@@ -76,6 +81,8 @@ def get_rag_capabilities() -> Dict[str, Any]:
         "degradations": degradations,
         "dependencies": {
             "chromadb_runtime": chroma_available,
+            "vector_store_available": vector_store_available,
+            "vector_store_backend": vector_store_backend,
             "llama_index": llama_index_available,
             "rag_pipeline_importable": rag_pipeline_importable,
             "ollama_package": ollama_package_available,

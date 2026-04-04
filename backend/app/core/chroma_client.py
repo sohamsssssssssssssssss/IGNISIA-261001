@@ -60,12 +60,37 @@ _client = None
 _collections: Dict[str, Any] = {}
 
 
+class InMemoryCollection:
+    """Compatibility fallback when Chroma cannot initialize on this Python runtime."""
+
+    fallback_backend = "memory"
+
+    def __init__(self, name: str, metadata: Dict[str, Any]) -> None:
+        self.name = name
+        self.metadata = dict(metadata)
+
+
+class InMemoryChromaClient:
+    """Lightweight collection registry used when Chroma is unavailable."""
+
+    backend = "memory_fallback"
+
+    def __init__(self) -> None:
+        self._collections: Dict[str, InMemoryCollection] = {}
+
+    def get_or_create_collection(self, name: str, metadata: Dict[str, Any] | None = None):
+        if name not in self._collections:
+            self._collections[name] = InMemoryCollection(name, metadata or {})
+        return self._collections[name]
+
+
 def get_chroma_client():
     global _client
     if _client is not None:
         return _client
     if chromadb is None or ChromaSettings is None:
-        return None
+        _client = InMemoryChromaClient()
+        return _client
 
     settings = get_settings()
     Path(settings.chroma_persist_dir).mkdir(parents=True, exist_ok=True)
@@ -75,8 +100,8 @@ def get_chroma_client():
             settings=ChromaSettings(anonymized_telemetry=False),
         )
     except Exception as exc:  # pragma: no cover - runtime compatibility varies by env
-        logger.warning("Chroma client unavailable; vector features disabled: %s", exc)
-        return None
+        logger.warning("Chroma client unavailable; using in-memory vector fallback: %s", exc)
+        _client = InMemoryChromaClient()
     return _client
 
 
@@ -87,9 +112,6 @@ def get_chroma_collection(name: str):
         return _collections[name]
 
     client = get_chroma_client()
-    if client is None:
-        return None
-
     spec = COLLECTION_SPECS[name]
     try:
         collection = client.get_or_create_collection(
@@ -97,8 +119,8 @@ def get_chroma_collection(name: str):
             metadata={k: v for k, v in spec.items()},
         )
     except Exception as exc:  # pragma: no cover - runtime compatibility varies by env
-        logger.warning("Chroma collection %s unavailable; vector features disabled: %s", name, exc)
-        return None
+        logger.warning("Chroma collection %s unavailable; using in-memory collection fallback: %s", name, exc)
+        collection = InMemoryCollection(name, spec)
     _collections[name] = collection
     return collection
 

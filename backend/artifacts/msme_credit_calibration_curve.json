@@ -1,5 +1,5 @@
 {
-  "model_version": "xgb-msme-v12.0-20260403111229",
+  "model_version": "xgb-msme-v12.0-20260404070942",
   "method": "isotonic_regression_tail_regularized",
   "score_mapping": "non_linear_power_curve_1.1",
   "curve_points": [

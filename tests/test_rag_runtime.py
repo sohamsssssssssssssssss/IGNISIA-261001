@@ -66,3 +66,30 @@ def test_rag_capabilities_can_be_disabled(monkeypatch):
     assert capabilities["modes"]["document_pipeline_with_web_intel"] is False
     assert capabilities["execution_mode"] == "disabled"
     assert capabilities["degradations"] == []
+
+
+def test_rag_capabilities_treat_memory_vector_store_as_healthy(monkeypatch):
+    monkeypatch.delenv("ENABLE_RAG", raising=False)
+    monkeypatch.delenv("ENABLE_WEB_INTEL", raising=False)
+    monkeypatch.delenv("ENABLE_LOCAL_GENERATION", raising=False)
+
+    import app.core.rag_runtime as rag_runtime
+
+    class MemoryFallbackClient:
+        backend = "memory_fallback"
+
+    monkeypatch.setattr(rag_runtime, "get_chroma_client", lambda: MemoryFallbackClient())
+    monkeypatch.setattr(
+        rag_runtime,
+        "_has_module",
+        lambda name: name in {"llama_index", "llama_index.core", "llama_index.vector_stores.chroma"},
+    )
+
+    reset_rag_capabilities()
+    capabilities = get_rag_capabilities()
+
+    assert capabilities["base_pipeline_ready"] is True
+    assert capabilities["degradations"] == ["local_generation_unavailable", "web_intel_unavailable"]
+    assert capabilities["dependencies"]["chromadb_runtime"] is False
+    assert capabilities["dependencies"]["vector_store_available"] is True
+    assert capabilities["dependencies"]["vector_store_backend"] == "memory_fallback"

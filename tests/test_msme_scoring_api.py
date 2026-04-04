@@ -230,6 +230,42 @@ def test_history_endpoint_persists_assessments(client):
     assert "data_freshness" in history_payload["history"][0]
 
 
+def test_apriori_seeding_uses_full_assessment_history(client):
+    storage = get_storage()
+    base_time = datetime(2026, 4, 4, tzinfo=timezone.utc)
+
+    for idx in range(55):
+        created_at = (base_time + timedelta(minutes=idx)).isoformat().replace("+00:00", "Z")
+        storage.record_assessment(
+            gstin="29CLEAN5678B1Z2" if idx % 3 == 0 else ("27ARJUN1234A1Z5" if idx % 3 == 1 else "09NEWCO1234A1Z9"),
+            company_name="Synthetic Demo MSME",
+            credit_score=820 if idx % 2 == 0 else 430,
+            risk_band="VERY_LOW_RISK" if idx % 2 == 0 else "HIGH_RISK",
+            fraud_risk="LOW" if idx % 2 == 0 else "HIGH",
+            model_version="test-model",
+            industry_code="1701",
+            months_active=12.0 if idx % 2 == 0 else 4.0,
+            scenario="stable",
+            data_sparse=False,
+            freshness_timestamp=created_at,
+            created_at=created_at,
+            top_reasons=[],
+            recommendation={
+                "eligible": idx % 2 == 0,
+                "recommended_amount": 250000,
+                "recommended_tenure_months": 24,
+            },
+            narrative=None,
+        )
+
+    seed_status = storage.ensure_mock_loan_outcomes_for_latest_assessments()
+    records = storage.get_rule_mining_records()
+
+    assert seed_status["total_outcomes"] >= 50
+    assert storage.count_outcome_labeled_records() >= 50
+    assert len(records) >= 50
+
+
 def test_auth_required_when_enabled(secured_client):
     response = secured_client.post("/api/v1/score/29CLEAN5678B1Z2")
     assert response.status_code == 401
