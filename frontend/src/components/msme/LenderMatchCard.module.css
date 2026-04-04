@@ -1,0 +1,371 @@
+.root {
+  --lm-bg: #111012;
+  --lm-accent: #2a9d8f;
+  --lm-accent-dim: rgba(42, 157, 143, 0.12);
+  --lm-accent-border: rgba(42, 157, 143, 0.2);
+  --lm-text-primary: #ede5d4;
+  --lm-text-body: #c8bfb0;
+  --lm-text-muted: #9a9488;
+  --lm-rule: rgba(237, 229, 212, 0.06);
+  --lm-green: #25a05e;
+  --lm-amber: #c97c14;
+  --lm-red: #c8293a;
+  --lm-skeleton-base: rgba(237, 229, 212, 0.08);
+  --lm-skeleton-highlight: rgba(237, 229, 212, 0.14);
+  background: var(--lm-bg);
+  border: 1px solid #1e1d1f;
+  border-left: 3px solid var(--lm-accent);
+  border-radius: 10px;
+  box-shadow: 0 2px 16px rgba(42, 157, 143, 0.06);
+}
+
+.cardPadding {
+  padding: 28px 32px;
+}
+
+.bodyFont {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.monoFont {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.headingFont {
+  font-family: 'DM Serif Display', Georgia, serif;
+}
+
+.rule {
+  border-top: 1px solid var(--lm-rule);
+}
+
+.mt4 {
+  margin-top: 16px;
+}
+
+.mt5 {
+  margin-top: 20px;
+}
+
+.mt6 {
+  margin-top: 24px;
+}
+
+.entered {
+  animation: lm-enter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headingText {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--lm-text-primary);
+}
+
+.subheading {
+  font-size: 0.72rem;
+  color: var(--lm-text-muted);
+  margin-left: 26px;
+}
+
+.matchStrengthPill {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.strengthStrong {
+  background: rgba(37, 160, 94, 0.12);
+  color: #25a05e;
+}
+
+.strengthModerate {
+  background: rgba(201, 124, 20, 0.12);
+  color: #c97c14;
+}
+
+.strengthMarginal {
+  background: rgba(200, 41, 58, 0.12);
+  color: #c8293a;
+}
+
+.primaryBlock {
+  background: rgba(42, 157, 143, 0.06);
+  border: 1px solid rgba(42, 157, 143, 0.2);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.primaryHeader {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.lenderIconWrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(42, 157, 143, 0.15);
+  border: 1px solid rgba(42, 157, 143, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.primaryInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.primaryName {
+  font-family: 'DM Serif Display', Georgia, serif;
+  font-size: 1.05rem;
+  color: var(--lm-text-primary);
+}
+
+.schemeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(42, 157, 143, 0.1);
+  color: var(--lm-accent);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  width: fit-content;
+}
+
+.primaryReason {
+  font-size: 0.88rem;
+  color: var(--lm-text-body);
+  line-height: 1.7;
+  margin: 12px 0 0;
+}
+
+.schemeNote {
+  font-size: 0.8rem;
+  color: var(--lm-text-muted);
+  font-style: italic;
+  margin: 8px 0 0;
+}
+
+.fraudCaution {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(200, 41, 58, 0.08);
+  border: 1px solid rgba(200, 41, 58, 0.2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-top: 16px;
+}
+
+.fraudCautionText {
+  font-size: 0.8rem;
+  color: #c8293a;
+  line-height: 1.6;
+}
+
+.sectionLabel {
+  color: var(--lm-text-muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.alternativesList {
+  display: flex;
+  flex-direction: column;
+}
+
+.alternativeRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lm-rule);
+  cursor: default;
+  transition: background 120ms ease;
+}
+
+.alternativeRow:last-child {
+  border-bottom: none;
+}
+
+.alternativeRow:hover {
+  background: rgba(237, 229, 212, 0.03);
+}
+
+.altIcon {
+  color: var(--lm-text-muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.altContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.altName {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--lm-text-primary);
+}
+
+.altNote {
+  font-size: 0.8rem;
+  color: var(--lm-text-muted);
+  line-height: 1.5;
+}
+
+.eligibilityPill {
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.eligHigh {
+  background: rgba(37, 160, 94, 0.1);
+  color: #25a05e;
+}
+
+.eligMedium {
+  background: rgba(201, 124, 20, 0.1);
+  color: #c97c14;
+}
+
+.eligLow {
+  background: rgba(237, 229, 212, 0.06);
+  color: #9a9488;
+}
+
+.footer {
+  font-size: 0.7rem;
+  color: var(--lm-text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skeletonHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonPrimaryBlock {
+  border-radius: 8px;
+  height: 120px;
+  width: 100%;
+}
+
+.skeletonAltRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.skeletonBar {
+  border-radius: 6px;
+}
+
+.skeletonPill {
+  border-radius: 999px;
+}
+
+.skeletonCircle {
+  border-radius: 50%;
+}
+
+.skeletonShimmer {
+  background: linear-gradient(
+    90deg,
+    var(--lm-skeleton-base) 25%,
+    var(--lm-skeleton-highlight) 50%,
+    var(--lm-skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@media (max-width: 768px) {
+  .cardPadding {
+    padding: 20px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .primaryHeader {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .lenderIconWrap {
+    width: 36px;
+    height: 36px;
+  }
+
+  .alternativeRow {
+    flex-wrap: wrap;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes lm-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

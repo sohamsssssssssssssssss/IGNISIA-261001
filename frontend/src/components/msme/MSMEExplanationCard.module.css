@@ -1,0 +1,318 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:opsz@6..40&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+
+.root {
+  --ec-bg: #111012;
+  --ec-accent: #2a9d8f;
+  --ec-accent-dim: rgba(42, 157, 143, 0.12);
+  --ec-accent-glow: rgba(42, 157, 143, 0.25);
+  --ec-text-primary: #ede5d4;
+  --ec-text-body: #c8bfb0;
+  --ec-text-muted: #9a9488;
+  --ec-rule: rgba(237, 229, 212, 0.1);
+  --ec-green: #25a05e;
+  --ec-amber: #c97c14;
+  --ec-red: #c8293a;
+  --ec-skeleton-base: rgba(237, 229, 212, 0.08);
+  --ec-skeleton-highlight: rgba(237, 229, 212, 0.14);
+  --ec-score-bg: rgba(42, 157, 143, 0.15);
+  --ec-score-text: #2a9d8f;
+  background: var(--ec-bg);
+  border: 1px solid #1e1d1f;
+  border-left: 3px solid var(--ec-accent);
+  border-radius: 10px;
+  box-shadow: 0 2px 16px rgba(42, 157, 143, 0.06);
+}
+
+.cardPadding {
+  padding: 28px 32px;
+}
+
+.bodyFont {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.headingFont {
+  font-family: 'DM Serif Display', Georgia, serif;
+}
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headingText {
+  color: var(--ec-text-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.subheading {
+  color: var(--ec-text-muted);
+  font-size: 0.72rem;
+  margin-left: 24px;
+}
+
+.scoreBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--ec-score-bg);
+  border: 1px solid color-mix(in srgb, var(--ec-score-text) 35%, transparent);
+}
+
+.scoreNumber {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ec-score-text);
+}
+
+.scoreBandLabel {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ec-score-text);
+}
+
+.rule {
+  border-top: 1px solid var(--ec-rule);
+}
+
+.mt4 {
+  margin-top: 16px;
+}
+
+.mt5 {
+  margin-top: 20px;
+}
+
+.mt6 {
+  margin-top: 24px;
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  color: var(--ec-text-muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.paragraph {
+  color: var(--ec-text-body);
+  font-size: 0.9rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+}
+
+.nextStepSection {
+  background: rgba(42, 157, 143, 0.06);
+  border-left: 2px solid var(--ec-accent);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.footer {
+  color: var(--ec-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.6;
+}
+
+.entered {
+  animation: ec-enter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skeletonHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.skeletonTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skeletonBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.skeletonSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.skeletonIconCircle {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--ec-skeleton-base) 25%,
+    var(--ec-skeleton-highlight) 50%,
+    var(--ec-skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.skeletonLines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonBar,
+.skeletonPill {
+  background: linear-gradient(
+    90deg,
+    var(--ec-skeleton-base) 25%,
+    var(--ec-skeleton-highlight) 50%,
+    var(--ec-skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+.skeletonBar {
+  border-radius: 6px;
+  height: 14px;
+}
+
+.skeletonPill {
+  border-radius: 999px;
+  height: 54px;
+}
+
+.w180 {
+  width: 180px;
+  height: 20px;
+}
+
+.w80 {
+  width: 80px;
+  height: 10px;
+}
+
+.w95p {
+  width: 95%;
+}
+
+.w88p {
+  width: 88%;
+}
+
+.w75p {
+  width: 75%;
+}
+
+.scoreSkeleton {
+  width: 112px;
+}
+
+.subtitleSkeleton {
+  max-width: 240px;
+  height: 10px;
+}
+
+.footerSkeleton {
+  max-width: 520px;
+  height: 12px;
+}
+
+@media (max-width: 768px) {
+  .cardPadding {
+    padding: 20px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .subheading {
+    margin-left: 24px;
+  }
+
+  .scoreBadge {
+    flex-direction: row;
+    gap: 10px;
+    padding: 8px 14px;
+  }
+
+  .scoreNumber {
+    font-size: 1.3rem;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes ec-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
