@@ -109,6 +109,17 @@ class FakeAnthropicClient:
         self.messages = FakeAnthropicMessages()
 
 
+class FakeLocalFirstLLM:
+    def __init__(self, text="Local Ollama reply", source="ollama:llama3.2"):
+        self.text = text
+        self.source = source
+        self.calls = []
+
+    def generate_sync_with_source(self, prompt, max_tokens=1024):
+        self.calls.append({"prompt": prompt, "max_tokens": max_tokens})
+        return self.text, self.source
+
+
 def _sample_score_payload():
     return {
         "gstin": "29CLEAN5678B1Z2",
@@ -130,19 +141,29 @@ def test_generate_narrative_returns_text_and_sources(tmp_path, monkeypatch):
     reset_database_runtime()
 
     anthropic_client = FakeAnthropicClient()
+    fallback_llm = FakeLocalFirstLLM(
+        text=(
+            "The borrower scored 742 with LOW_RISK because GST regularity and payment cadence are strong.\n\n"
+            "Key risk is limited, with fraud risk LOW and strong compliance signals.\n\n"
+            "Recommend proceeding to manual review of policy terms; improving shipment momentum could strengthen the case."
+        ),
+        source="ollama:llama3.2",
+    )
     service = LLMService(
         retrieval_service=FakeRetrievalService(),
         context_builder=FakeContextBuilder(),
         session_store=SessionStore(),
         anthropic_client=anthropic_client,
+        fallback_llm=fallback_llm,
     )
 
     result = service.generate_narrative("29CLEAN5678B1Z2", _sample_score_payload())
 
     assert "742" in result["narrative"]
-    assert result["model_used"] == "claude-sonnet-4-20250514"
+    assert result["model_used"] == "ollama:llama3.2"
     assert len(result["sources"]) >= 2
-    assert anthropic_client.messages.calls[0]["max_tokens"] == 1000
+    assert fallback_llm.calls[0]["max_tokens"] == 1000
+    assert anthropic_client.messages.calls == []
 
 
 def test_chat_creates_session_and_persists_history(tmp_path, monkeypatch):
@@ -155,11 +176,16 @@ def test_chat_creates_session_and_persists_history(tmp_path, monkeypatch):
 
     session_store = SessionStore()
     anthropic_client = FakeAnthropicClient()
+    fallback_llm = FakeLocalFirstLLM(
+        text="With score 742 and fraud risk LOW, I would not give final approval yet; proceed with conditional review.",
+        source="ollama:llama3.2",
+    )
     service = LLMService(
         retrieval_service=FakeRetrievalService(),
         context_builder=FakeContextBuilder(),
         session_store=session_store,
         anthropic_client=anthropic_client,
+        fallback_llm=fallback_llm,
     )
 
     first = service.chat(
@@ -182,4 +208,29 @@ def test_chat_creates_session_and_persists_history(tmp_path, monkeypatch):
 
     assert second["session_id"] == first["session_id"]
     assert len(session_store.get_history(first["session_id"])) == 4
-    assert anthropic_client.messages.calls[1]["max_tokens"] == 800
+    assert fallback_llm.calls[1]["max_tokens"] == 800
+    assert anthropic_client.messages.calls == []
+
+
+def test_llm_service_uses_anthropic_only_after_template_fallback(tmp_path, monkeypatch):
+    db_path = tmp_path / "llm-anthropic-fallback.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{db_path}")
+    monkeypatch.setenv("DATABASE_PATH", str(db_path))
+    get_settings.cache_clear()
+    storage_module._storage = None
+    reset_database_runtime()
+
+    anthropic_client = FakeAnthropicClient()
+    fallback_llm = FakeLocalFirstLLM(text="Template text", source="template-fallback")
+    service = LLMService(
+        retrieval_service=FakeRetrievalService(),
+        context_builder=FakeContextBuilder(),
+        session_store=SessionStore(),
+        anthropic_client=anthropic_client,
+        fallback_llm=fallback_llm,
+    )
+
+    result = service.generate_narrative("29CLEAN5678B1Z2", _sample_score_payload())
+
+    assert result["model_used"] == "claude-sonnet-4-20250514"
+    assert anthropic_client.messages.calls[0]["max_tokens"] == 1000

@@ -2,15 +2,15 @@ import React from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 interface LoanRecommendationProps {
-  recommendation: {
-    eligible: boolean;
+  recommendation?: {
+    eligible?: boolean;
     reason?: string;
-    recommended_amount: number;
-    recommended_tenure_months: number;
+    recommended_amount?: number;
+    recommended_tenure_months?: number;
     indicative_rate_pct: number | null;
     base_rate?: number;
     risk_premium?: number;
-  };
+  } | null;
   manualReviewRequired?: boolean;
   manualReviewReason?: string;
 }
@@ -22,7 +22,15 @@ function formatINR(amount: number): string {
 }
 
 export const LoanRecommendation: React.FC<LoanRecommendationProps> = ({ recommendation, manualReviewRequired, manualReviewReason }) => {
-  const { eligible, reason, recommended_amount, recommended_tenure_months, indicative_rate_pct, base_rate, risk_premium } = recommendation;
+  const {
+    eligible = false,
+    reason,
+    recommended_amount = 0,
+    recommended_tenure_months = 0,
+    indicative_rate_pct = null,
+    base_rate,
+    risk_premium,
+  } = recommendation ?? {};
 
   if (manualReviewRequired) {
     return (
@@ -30,6 +38,17 @@ export const LoanRecommendation: React.FC<LoanRecommendationProps> = ({ recommen
         <div className="msme-card-title">Loan Recommendation</div>
         <div className="msme-alert msme-alert--warning">
           {manualReviewReason || 'Manual review required before auto-approval can be considered.'}
+        </div>
+      </div>
+    );
+  }
+
+  if (!recommendation) {
+    return (
+      <div className="msme-card">
+        <div className="msme-card-title">Loan Recommendation</div>
+        <div className="msme-alert msme-alert--warning">
+          Recommendation data is unavailable for this response. Refresh the score to reload the underwriting output.
         </div>
       </div>
     );

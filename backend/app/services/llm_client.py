@@ -1,7 +1,7 @@
 """
 Unified LLM client with cascading fallback:
-  1. Groq API (cloud, fast, free tier)
-  2. Ollama (local)
+  1. Ollama (local, preferred)
+  2. Groq API (cloud fallback)
   3. Template fallback (no LLM required)
 """
 
@@ -13,7 +13,7 @@ from typing import Optional
 
 class LLMClient:
     """
-    Tries Groq API first, then Ollama, then returns a template response.
+    Tries local Ollama first, then Groq, then returns a template response.
     This ensures the app works in any environment.
     """
 
@@ -24,50 +24,60 @@ class LLMClient:
         self.ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
     async def generate(self, prompt: str, max_tokens: int = 1024) -> str:
-        """Try Groq → Ollama → template fallback."""
+        """Try Ollama → Groq → template fallback."""
+        text, _ = await self.generate_with_source(prompt, max_tokens=max_tokens)
+        return text
 
-        # 1. Try Groq API
+    async def generate_with_source(self, prompt: str, max_tokens: int = 1024) -> tuple[str, str]:
+        """Return generated text plus the backend that produced it."""
+
+        # 1. Try Ollama
+        try:
+            result = await self._ollama(prompt)
+            if result:
+                return result, "ollama:llama3.2"
+        except Exception:
+            pass
+
+        # 2. Try Groq API
         if self.groq_key:
             try:
                 result = await self._groq(prompt, max_tokens)
                 if result:
-                    return result
+                    return result, f"groq:{self.groq_model}"
             except Exception:
                 pass
 
-        # 2. Try Ollama
+        # 3. Template fallback
+        return self._fallback(prompt), "template-fallback"
+
+    def generate_sync(self, prompt: str, max_tokens: int = 1024) -> str:
+        """Synchronous version — tries Ollama → Groq → template."""
+        text, _ = self.generate_sync_with_source(prompt, max_tokens=max_tokens)
+        return text
+
+    def generate_sync_with_source(self, prompt: str, max_tokens: int = 1024) -> tuple[str, str]:
+        """Return generated text plus the backend that produced it."""
+
+        # 1. Try Ollama
         try:
-            result = await self._ollama(prompt)
+            result = self._ollama_sync(prompt)
             if result:
-                return result
+                return result, "ollama:llama3.2"
         except Exception:
             pass
 
-        # 3. Template fallback
-        return self._fallback(prompt)
-
-    def generate_sync(self, prompt: str, max_tokens: int = 1024) -> str:
-        """Synchronous version — tries Groq → Ollama → template."""
-
-        # 1. Try Groq API
+        # 2. Try Groq API
         if self.groq_key:
             try:
                 result = self._groq_sync(prompt, max_tokens)
                 if result:
-                    return result
+                    return result, f"groq:{self.groq_model}"
             except Exception:
                 pass
 
-        # 2. Try Ollama
-        try:
-            result = self._ollama_sync(prompt)
-            if result:
-                return result
-        except Exception:
-            pass
-
         # 3. Template fallback
-        return self._fallback(prompt)
+        return self._fallback(prompt), "template-fallback"
 
     # ── Groq (async) ─────────────────────────────────
     async def _groq(self, prompt: str, max_tokens: int) -> Optional[str]:

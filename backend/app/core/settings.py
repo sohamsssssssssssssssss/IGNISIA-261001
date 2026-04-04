@@ -12,6 +12,45 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 
+def _load_env_file(path: Path) -> None:
+    """
+    Lightweight `.env` loader so local backend runs can pick up secrets such as
+    `TAVILY_API_KEY` without requiring shell exports.
+    Existing environment variables always win.
+    """
+    if not path.exists() or not path.is_file():
+        return
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key or key in os.environ:
+            continue
+
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+def _bootstrap_env() -> None:
+    current_file = Path(__file__).resolve()
+    backend_root = current_file.parents[2]
+    repo_root = current_file.parents[3]
+
+    # Load backend-local first, then repo-root, while still letting real shell
+    # environment variables override both.
+    for env_path in (backend_root / ".env", repo_root / ".env"):
+        _load_env_file(env_path)
+
+
+_bootstrap_env()
+
+
 def _parse_bool(value: str | None, default: bool) -> bool:
     if value is None:
         return default

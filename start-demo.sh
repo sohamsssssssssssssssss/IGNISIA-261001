@@ -6,6 +6,13 @@ set -e
 
 export DEMO_MODE=true
 
+BACKEND_PYTHON="python"
+if [ -x "backend/venv/bin/python" ]; then
+  BACKEND_PYTHON="$(pwd)/backend/venv/bin/python"
+elif [ -x "backend/.venv/bin/python" ]; then
+  BACKEND_PYTHON="$(pwd)/backend/.venv/bin/python"
+fi
+
 echo "============================================"
 echo "  IntelliCredit — Demo Mode"
 echo "  All agents using cached fixture data"
@@ -15,7 +22,7 @@ echo ""
 # Start backend
 echo "[1/2] Starting FastAPI backend on :8000..."
 cd backend
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
+"$BACKEND_PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 cd ..
 

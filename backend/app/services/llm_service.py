@@ -1,6 +1,7 @@
 """
 LLM orchestration for underwriting narratives and stateful chat.
-Uses Anthropic Claude Sonnet first and falls back to the local unified LLM client.
+Prefers the unified local-first client and only uses Anthropic as a final
+fallback when the unified client could not do better than the template path.
 """
 
 from __future__ import annotations
@@ -125,6 +126,23 @@ class LLMService:
         }
 
     def _generate_text(self, *, prompt: str, max_tokens: int, temperature: float) -> tuple[str, str]:
+        fallback_prompt = (
+            f"{self.context_builder.get_system_prompt()}\n\n"
+            f"{prompt}\n\n"
+            "If fraud is detected, flag it prominently. Do not make the final approval decision."
+        )
+        if hasattr(self.fallback_llm, "generate_sync_with_source"):
+            text, source = self.fallback_llm.generate_sync_with_source(
+                fallback_prompt,
+                max_tokens=max_tokens,
+            )
+        else:
+            text = self.fallback_llm.generate_sync(fallback_prompt, max_tokens=max_tokens)
+            source = "fallback-llm"
+
+        if source != "template-fallback":
+            return text, source
+
         if self.anthropic_client is not None:
             try:
                 message = self.anthropic_client.messages.create(
@@ -136,21 +154,16 @@ class LLMService:
                 )
                 blocks = []
                 for block in getattr(message, "content", []):
-                    text = getattr(block, "text", None)
-                    if text:
-                        blocks.append(text)
-                text = "\n".join(blocks).strip()
-                if text:
-                    return text, ANTHROPIC_MODEL
+                    value = getattr(block, "text", None)
+                    if value:
+                        blocks.append(value)
+                candidate = "\n".join(blocks).strip()
+                if candidate:
+                    return candidate, ANTHROPIC_MODEL
             except Exception:
                 pass
 
-        fallback_prompt = (
-            f"{self.context_builder.get_system_prompt()}\n\n"
-            f"{prompt}\n\n"
-            "If fraud is detected, flag it prominently. Do not make the final approval decision."
-        )
-        return self.fallback_llm.generate_sync(fallback_prompt, max_tokens=max_tokens), "fallback-llm"
+        return text, source
 
     def _build_anthropic_client(self):
         api_key = os.getenv("ANTHROPIC_API_KEY")

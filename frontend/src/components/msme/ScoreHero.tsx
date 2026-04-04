@@ -3,7 +3,7 @@ import { ShieldAlert, AlertTriangle, Clock, Database } from 'lucide-react';
 
 interface ScoreHeroProps {
   creditScore: number;
-  riskBand: { band: string; description: string; range: string };
+  riskBand?: { band?: string; description?: string; range?: string } | null;
   percentile?: {
     score_percentile: number;
     statement?: string;
@@ -40,8 +40,10 @@ export const ScoreHero: React.FC<ScoreHeroProps> = ({
   creditScore, riskBand, percentile, scoreFreshness, fraudPenaltyApplied, dataSparse,
   companyName, gstin, modelVersion, topReason,
 }) => {
+  const bandLabel = riskBand?.band ?? 'UNKNOWN';
+  const bandDescription = riskBand?.description ?? 'Risk band metadata is unavailable for this response.';
   const color = scoreColor(creditScore);
-  const bColor = bandColor(riskBand.band);
+  const bColor = bandColor(bandLabel);
   const heroToneClass = topReason?.direction === 'positive'
     ? 'msme-card--top-reason-positive'
     : topReason?.direction === 'negative'
@@ -109,10 +111,10 @@ export const ScoreHero: React.FC<ScoreHeroProps> = ({
         {/* Risk band + meta */}
         <div className="msme-hero-meta">
           <div className="msme-risk-pill" style={{ borderColor: bColor, color: bColor }}>
-            {riskBand.band.replace(/_/g, ' ')}
+            {bandLabel.replace(/_/g, ' ')}
           </div>
           <div style={{ fontFamily: 'var(--body)', fontSize: '12px', color: 'var(--text-dim)', maxWidth: 260, lineHeight: 1.5 }}>
-            {riskBand.description}
+            {bandDescription}
           </div>
           {percentile && (
             <div className="msme-score-sub">

@@ -26,6 +26,14 @@ def _has_module(name: str) -> bool:
         return False
 
 
+def _can_import(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except Exception:
+        return False
+
+
 @lru_cache(maxsize=1)
 def get_rag_capabilities() -> Dict[str, Any]:
     rag_enabled = _env_enabled("ENABLE_RAG", default=True)
@@ -37,13 +45,16 @@ def get_rag_capabilities() -> Dict[str, Any]:
         _has_module("llama_index")
         or (_has_module("llama_index.core") and _has_module("llama_index.vector_stores.chroma"))
     )
+    rag_pipeline_importable = _can_import("app.rag.pipeline")
     ollama_package_available = _has_module("ollama")
     tavily_package_available = _has_module("tavily")
 
-    base_pipeline_ready = rag_enabled and chroma_available and llama_index_available
+    base_pipeline_ready = rag_enabled and llama_index_available and rag_pipeline_importable
     generation_ready = local_generation_enabled and ollama_package_available
     web_intel_ready = web_intel_enabled and tavily_package_available and bool(os.getenv("TAVILY_API_KEY"))
     degradations = []
+    if base_pipeline_ready and not chroma_available:
+        degradations.append("vector_store_fallback_active")
     if base_pipeline_ready and not generation_ready:
         degradations.append("local_generation_unavailable")
     if base_pipeline_ready and not web_intel_ready:
@@ -66,6 +77,7 @@ def get_rag_capabilities() -> Dict[str, Any]:
         "dependencies": {
             "chromadb_runtime": chroma_available,
             "llama_index": llama_index_available,
+            "rag_pipeline_importable": rag_pipeline_importable,
             "ollama_package": ollama_package_available,
             "tavily_package": tavily_package_available,
             "tavily_api_key_configured": bool(os.getenv("TAVILY_API_KEY")),

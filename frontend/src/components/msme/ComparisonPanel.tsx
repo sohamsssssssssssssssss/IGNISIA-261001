@@ -12,7 +12,7 @@ interface ComparePayload {
   gstin: string;
   company_name: string;
   credit_score: number;
-  risk_band: { band: string };
+  risk_band?: { band?: string } | null;
   top_reasons: TopReason[];
   feature_vector?: Record<string, number>;
   percentile?: {
@@ -82,7 +82,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ pinned, curren
           <div className="msme-metric-card" key={item.gstin} style={{ textAlign: 'left' }}>
             <div className="msme-inline-meta" style={{ marginBottom: 8 }}>{item.company_name}</div>
             <div className="msme-trend-value">{item.credit_score}</div>
-            <div className="msme-reason-meta" style={{ opacity: 0.8 }}>{item.risk_band.band.replace(/_/g, ' ')}</div>
+            <div className="msme-reason-meta" style={{ opacity: 0.8 }}>{(item.risk_band?.band ?? 'UNKNOWN').replace(/_/g, ' ')}</div>
             <div className="msme-reason-meta" style={{ opacity: 0.8, marginTop: 8 }}>
               {item.percentile?.statement || `Better than ${item.percentile?.score_percentile ?? Math.max(1, Math.min(99, Math.round(((item.credit_score - 300) / 600) * 100)))}% of the peer group`}
             </div>

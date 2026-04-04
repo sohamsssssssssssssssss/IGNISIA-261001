@@ -1,6 +1,6 @@
 """
 Narrative Engine — generates CAM prose sections using the unified LLM client.
-Falls back gracefully: Groq → Ollama → template.
+Falls back gracefully: Ollama → Groq → template.
 """
 
 import json

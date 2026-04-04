@@ -14,7 +14,7 @@ interface DataSources {
 }
 
 interface DataSourceBannerProps {
-  dataSources: DataSources;
+  dataSources?: DataSources | null;
   onRefresh?: (stream?: string) => void;
   refreshing?: boolean;
 }
@@ -29,13 +29,33 @@ function freshnessMeta(ts: string): { label: string; tone: 'green' | 'amber' | '
 }
 
 export const DataSourceBanner: React.FC<DataSourceBannerProps> = ({ dataSources, onRefresh, refreshing }) => {
-  const pipelineEntries = Object.entries(dataSources.pipelines || {});
+  const pipelineEntries = Object.entries(dataSources?.pipelines ?? {});
   const anyManualReview = pipelineEntries.some(([, source]) => freshnessMeta(source.freshness).manualReview);
   const streamMap: Record<string, string> = {
     gst_velocity: 'gst',
     upi_cadence: 'upi',
     eway_bill: 'eway',
   };
+
+  if (!dataSources) {
+    return (
+      <div className="msme-card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+          <div className="msme-card-title" style={{ marginBottom: 0 }}>Data Provenance</div>
+          {onRefresh && (
+            <button className="msme-btn msme-btn--ghost" onClick={() => onRefresh()} disabled={refreshing}>
+              <RefreshCcw size={12} className={refreshing ? 'msme-spin' : ''} />
+              {refreshing ? 'Refreshing...' : 'Refresh Data'}
+            </button>
+          )}
+        </div>
+        <div className="msme-alert msme-alert--warning">
+          <AlertTriangle size={12} />
+          Data provenance is temporarily unavailable for this response. Refresh the score to reload pipeline metadata.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="msme-card">

@@ -2,8 +2,8 @@ import React from 'react';
 import { FileText, Wallet, Truck, AlertTriangle } from 'lucide-react';
 
 interface PipelineSignalsProps {
-  signals: {
-    gst_velocity: {
+  signals?: {
+    gst_velocity?: {
       filing_rate: number;
       avg_delay: number;
       on_time_pct: number;
@@ -13,7 +13,7 @@ interface PipelineSignalsProps {
       confidence_weight: number;
       data_freshness: string;
     };
-    upi_cadence: {
+    upi_cadence?: {
       avg_daily_txns: number;
       regularity_score: number;
       inflow_outflow_ratio: number;
@@ -23,7 +23,7 @@ interface PipelineSignalsProps {
       confidence_weight: number;
       data_freshness: string;
     };
-    eway_bill: {
+    eway_bill?: {
       avg_monthly_bills: number;
       volume_momentum: number;
       interstate_ratio: number;
@@ -33,7 +33,7 @@ interface PipelineSignalsProps {
       confidence_weight: number;
       data_freshness: string;
     };
-  };
+  } | null;
 }
 
 const SparseTag = () => (
@@ -50,7 +50,20 @@ const Row: React.FC<{ label: string; value: string | number; warn?: boolean }> =
 );
 
 export const PipelineSignals: React.FC<PipelineSignalsProps> = ({ signals }) => {
-  const { gst_velocity: gst, upi_cadence: upi, eway_bill: eway } = signals;
+  const gst = signals?.gst_velocity;
+  const upi = signals?.upi_cadence;
+  const eway = signals?.eway_bill;
+
+  if (!gst || !upi || !eway) {
+    return (
+      <div className="msme-card">
+        <div className="msme-card-title">Pipeline Signals</div>
+        <div className="msme-alert msme-alert--warning">
+          Pipeline signal details are temporarily unavailable for this response. Refresh the score to reload the feature inputs.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="msme-grid-3">
