@@ -1,0 +1,397 @@
+.root {
+  --st-bg: #111012;
+  --st-accent: #2A9D8F;
+  --st-accent-dim: rgba(42, 157, 143, 0.12);
+  --st-gold: #C8A84B;
+  --st-text-primary: #EDE5D4;
+  --st-text-body: #C8BFB0;
+  --st-text-muted: #9A9488;
+  --st-rule: rgba(237, 229, 212, 0.06);
+  --st-green: #25A05E;
+  --st-amber: #C97C14;
+  --st-red: #C8293A;
+  --st-skeleton-base: rgba(237, 229, 212, 0.08);
+  --st-skeleton-highlight: rgba(237, 229, 212, 0.14);
+
+  background: var(--st-bg);
+  border: 1px solid #1E1D1F;
+  border-left: 3px solid var(--st-accent);
+  border-radius: 10px;
+  box-shadow: 0 2px 16px rgba(42, 157, 143, 0.06);
+}
+
+.cardPadding {
+  padding: 28px 32px;
+}
+
+.bodyFont {
+  font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+}
+
+.monoFont {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.headingFont {
+  font-family: 'DM Serif Display', Georgia, serif;
+}
+
+.rule {
+  border-top: 1px solid var(--st-rule);
+}
+
+.mt3 {
+  margin-top: 12px;
+}
+
+.mt4 {
+  margin-top: 16px;
+}
+
+.mt5 {
+  margin-top: 20px;
+}
+
+.mt6 {
+  margin-top: 24px;
+}
+
+.entered {
+  animation: st-enter 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.headingText {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--st-text-primary);
+}
+
+.subheading {
+  font-size: 0.72rem;
+  color: var(--st-text-muted);
+  margin-left: 26px;
+}
+
+.statPills {
+  display: flex;
+  gap: 8px;
+}
+
+.statPill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 8px;
+  gap: 2px;
+}
+
+.statPillNow {
+  background: rgba(237, 229, 212, 0.06);
+}
+
+.statPillTarget {
+  background: rgba(42, 157, 143, 0.1);
+}
+
+.statPillLabel {
+  font-size: 0.6rem;
+  color: var(--st-text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statPillValue {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.statPillValueNow {
+  color: var(--st-text-primary);
+}
+
+.statPillValueTarget {
+  color: var(--st-accent);
+}
+
+.callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 8px 14px;
+}
+
+.calloutGreen {
+  background: rgba(37, 160, 94, 0.08);
+  border: 1px solid rgba(37, 160, 94, 0.2);
+}
+
+.calloutAmber {
+  background: rgba(201, 124, 20, 0.08);
+  border: 1px solid rgba(201, 124, 20, 0.2);
+}
+
+.calloutText {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.calloutTextGreen {
+  color: #25A05E;
+}
+
+.calloutTextAmber {
+  color: #C97C14;
+}
+
+.chartWrap {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.tooltip {
+  background: #1A1818;
+  border: 1px solid rgba(42, 157, 143, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.tooltipLabel {
+  font-size: 0.78rem;
+  color: var(--st-text-muted);
+  margin-bottom: 4px;
+}
+
+.tooltipScore {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--st-text-primary);
+}
+
+.tooltipDelta {
+  font-size: 0.75rem;
+  color: var(--st-accent);
+  margin-top: 2px;
+}
+
+.tooltipActions {
+  font-size: 0.72rem;
+  color: var(--st-text-muted);
+  margin-top: 2px;
+}
+
+.milestones {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+}
+
+.milestone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--st-rule);
+}
+
+.milestone:last-child {
+  border-right: none;
+}
+
+.milestoneScore {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.milestoneScoreActual {
+  color: var(--st-text-muted);
+}
+
+.milestoneScoreProjected {
+  color: var(--st-accent);
+}
+
+.milestoneDay {
+  font-size: 0.68rem;
+  color: var(--st-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.milestoneActions {
+  font-size: 0.65rem;
+  color: var(--st-accent);
+}
+
+.milestoneActionsBaseline {
+  font-size: 0.65rem;
+  color: var(--st-text-muted);
+}
+
+.footer {
+  font-size: 0.7rem;
+  color: var(--st-text-muted);
+  line-height: 1.6;
+}
+
+.skeletonHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.skeletonHeaderLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skeletonStatPills {
+  display: flex;
+  gap: 8px;
+}
+
+.skeletonStatPill {
+  width: 70px;
+  height: 52px;
+  border-radius: 8px;
+}
+
+.skeletonCallout {
+  width: 100%;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.skeletonChart {
+  width: 100%;
+  height: 240px;
+  border-radius: 8px;
+}
+
+.skeletonMilestones {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.skeletonMilestone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+}
+
+.skeletonBar {
+  border-radius: 6px;
+}
+
+.skeletonPill {
+  border-radius: 999px;
+}
+
+.skeletonBar,
+.skeletonPill,
+.skeletonStatPill,
+.skeletonCallout,
+.skeletonChart {
+  background: linear-gradient(
+    90deg,
+    var(--st-skeleton-base) 25%,
+    var(--st-skeleton-highlight) 50%,
+    var(--st-skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+@keyframes st-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes st-pulse {
+  0% {
+    opacity: 0.5;
+    r: 10;
+  }
+
+  100% {
+    opacity: 0;
+    r: 18;
+  }
+}
+
+@media (max-width: 768px) {
+  .cardPadding {
+    padding: 20px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .statPills {
+    flex-direction: row;
+  }
+
+  .milestones {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .milestone:nth-child(2) {
+    border-right: none;
+  }
+
+  .milestone:nth-child(3) {
+    border-top: 1px solid var(--st-rule);
+  }
+
+  .milestone:nth-child(4) {
+    border-top: 1px solid var(--st-rule);
+  }
+}
