@@ -133,6 +133,55 @@ function toSimilarCasesPanelCases(similarCases: Array<any> | undefined) {
   }));
 }
 
+function HistoricalPatternCard({
+  pattern,
+}: {
+  pattern: { explanation: string; confidence: number; lift: number; record_count: number }
+}) {
+  return (
+    <div
+      className="msme-card"
+      style={{
+        background: 'linear-gradient(180deg, rgba(12, 18, 36, 0.96), rgba(9, 15, 29, 0.92))',
+        borderLeft: '3px solid rgba(129, 140, 248, 0.95)',
+      }}
+    >
+      <div
+        style={{
+          color: 'rgba(165, 180, 252, 0.92)',
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          letterSpacing: '0.12em',
+          marginBottom: 12,
+          textTransform: 'uppercase',
+        }}
+      >
+        Historical Pattern
+      </div>
+      <div style={{ color: 'var(--text)', fontSize: '0.98rem', lineHeight: 1.7 }}>
+        {pattern.explanation}
+      </div>
+      <div
+        style={{
+          color: 'var(--text-dim)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          fontFamily: 'var(--mono)',
+          fontSize: 11,
+          gap: 14,
+          letterSpacing: '0.06em',
+          marginTop: 14,
+          textTransform: 'uppercase',
+        }}
+      >
+        <span>{Math.round(pattern.confidence * 100)}% confidence</span>
+        <span>{pattern.lift.toFixed(1)}x lift</span>
+        <span>{pattern.record_count} cases</span>
+      </div>
+    </div>
+  );
+}
+
 export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) => {
   const [gstin, setGstin] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -146,7 +195,8 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
   const [pinnedResult, setPinnedResult] = useState<any>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [showGraph, setShowGraph] = useState(false);
-  const [chatOpen, setChatOpen] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [historicalPatterns, setHistoricalPatterns] = useState<Array<{ explanation: string; confidence: number; lift: number; record_count: number }>>([]);
 
   useEffect(() => {
     if (!loading) {
@@ -185,6 +235,37 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     () => toSimilarCasesPanelCases(sourceBundle?.similarCases),
     [sourceBundle],
   );
+
+  useEffect(() => {
+    if (!result?.gstin) {
+      setHistoricalPatterns([]);
+      return;
+    }
+
+    let cancelled = false;
+    setHistoricalPatterns(Array.isArray(result.historical_patterns) ? result.historical_patterns : []);
+
+    const loadHistoricalPatterns = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/insights/rules/match?gstin=${encodeURIComponent(result.gstin)}`,
+          { headers: buildHeaders() },
+        );
+        if (!response.ok) return;
+        const payload = await response.json() as { rules?: Array<{ explanation: string; confidence: number; lift: number; record_count: number }> };
+        if (!cancelled && Array.isArray(payload.rules)) {
+          setHistoricalPatterns(payload.rules);
+        }
+      } catch (matchError) {
+        console.warn('Historical pattern fetch failed', matchError);
+      }
+    };
+
+    void loadHistoricalPatterns();
+    return () => {
+      cancelled = true;
+    };
+  }, [result?.gstin]);
 
   const loadScoreArtifacts = async (targetGstin: string, targetCompanyName: string) => {
     const scoreUrl = `${API_BASE}/api/v1/score/${encodeURIComponent(targetGstin)}${targetCompanyName ? `?company_name=${encodeURIComponent(targetCompanyName)}` : ''}`;
@@ -237,7 +318,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setSimulation(null);
     setGraphData(null);
     setShowGraph(false);
-    setChatOpen(true);
+    setChatOpen(false);
 
     try {
       const { data, simulationData, graphPayload } = await loadScoreArtifacts(targetGstin, targetCompanyName);
@@ -337,6 +418,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
     setSimulation(null);
     setGraphData(null);
     setShowGraph(false);
+    setChatOpen(false);
   };
 
   const handleRefresh = async (stream?: string) => {
@@ -368,7 +450,7 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
   };
 
   const content = (
-    <div className="msme-container">
+    <div className={`msme-container ${chatOpen ? 'msme-container--chat-open' : ''}`}>
         <RuntimeStatusBanner apiBase={API_BASE} apiToken={API_TOKEN} />
         {/* Search card */}
         <div className="msme-card">
@@ -484,17 +566,11 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
               isRegenerating={narrativeRegenerating}
             />
 
-            <div className="msme-grid-2">
-              <SimilarCasesPanel cases={similarCases} isLoading={loading} />
-              <ChatPanel
-                applicationId={result.gstin}
-                applicantName={result.company_name || companyName || result.gstin}
-                creditScore={result.credit_score}
-                onSendMessage={handleChatSend}
-                isOpen={chatOpen}
-                onToggle={() => setChatOpen((current) => !current)}
-              />
-            </div>
+            <SimilarCasesPanel cases={similarCases} isLoading={loading} />
+
+            {historicalPatterns.length > 0 ? (
+              <HistoricalPatternCard pattern={historicalPatterns[0]} />
+            ) : null}
 
             {pinnedResult && pinnedResult.gstin !== result.gstin && (
               <Suspense fallback={<div className="msme-card"><div className="msme-card-title">Comparison Mode</div><div className="msme-inline-meta">Loading comparison...</div></div>}>
@@ -595,7 +671,18 @@ export const MSMEScoring: React.FC<MSMEScoringProps> = ({ showTopbar = true }) =
             <div className="msme-empty-sub">Use a valid 15-character GSTIN or select a demo scenario above</div>
           </div>
         )}
-      </div>
+
+        {result ? (
+          <ChatPanel
+            applicationId={result.gstin}
+            applicantName={result.company_name || companyName || result.gstin}
+            creditScore={result.credit_score}
+            onSendMessage={handleChatSend}
+            isOpen={chatOpen}
+            onToggle={() => setChatOpen((current) => !current)}
+          />
+        ) : null}
+    </div>
   );
 
   if (!showTopbar) {

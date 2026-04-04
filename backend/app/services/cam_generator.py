@@ -4,7 +4,14 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ALIGN_VERTICAL
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from weasyprint import HTML
+try:
+    # WeasyPrint needs native libraries like libgobject/Pango. On macOS these
+    # are often missing unless GTK is installed, so keep PDF export optional.
+    from weasyprint import HTML as _WeasyHTML
+    _WEASYPRINT_AVAILABLE = True
+except (OSError, ImportError):
+    _WeasyHTML = None
+    _WEASYPRINT_AVAILABLE = False
 import os
 from datetime import date
 from typing import Dict, Any
@@ -770,8 +777,15 @@ class CAMGenerator:
 
     # ------------------------------------------------------------------
     def convert_docx_to_pdf(self, docx_path: str, output_pdf_path: str) -> str:
+        if not _WEASYPRINT_AVAILABLE:
+            raise RuntimeError(
+                "WeasyPrint is not available on this system. DOCX export still works, "
+                "but PDF conversion needs native libraries such as libgobject and Pango. "
+                "On local macOS setups, install Homebrew's gtk+3 stack (or equivalent GTK libraries) "
+                "to enable PDF export."
+            )
         html_string = f"<h1>Credit Appraisal Memo</h1><p>Converted from {docx_path}</p>"
-        HTML(string=html_string).write_pdf(output_pdf_path)
+        _WeasyHTML(string=html_string).write_pdf(output_pdf_path)
         return output_pdf_path
 
 

@@ -50,7 +50,7 @@ body {
   min-height: 56px;
   background: #0D0C0E;
   border-bottom: 1px solid var(--card-border);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .msme-wordmark {
@@ -73,6 +73,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .msme-shell-version {
@@ -86,41 +88,82 @@ body {
 .msme-nav {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 6px;
+  border: 1px solid rgba(200, 168, 75, 0.18);
+  background:
+    linear-gradient(180deg, rgba(24, 22, 18, 0.96), rgba(15, 13, 11, 0.92));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 10px 26px rgba(0, 0, 0, 0.22);
+  border-radius: 999px;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .msme-nav__item {
+  appearance: none;
+  -webkit-appearance: none;
   align-items: center;
-  background: transparent;
-  border: 1px solid transparent;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(255, 255, 255, 0));
+  border: 1px solid rgba(200, 168, 75, 0.14);
   border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   color: var(--text-dim);
   cursor: pointer;
   display: inline-flex;
   font-family: var(--mono);
   font-size: 10px;
+  font-weight: 500;
   justify-content: center;
-  letter-spacing: 1.3px;
-  padding: 8px 12px;
+  letter-spacing: 1.6px;
+  min-height: 32px;
+  padding: 8px 16px;
   text-transform: uppercase;
-  transition: all 0.18s ease;
+  transition:
+    color 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .msme-nav__item:hover {
-  border-color: rgba(200, 168, 75, 0.25);
+  background: linear-gradient(180deg, rgba(200, 168, 75, 0.08), rgba(200, 168, 75, 0.02));
+  border-color: rgba(200, 168, 75, 0.32);
   color: var(--gold);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(200, 168, 75, 0.08);
 }
 
 .msme-nav__item.is-active {
-  background: rgba(200, 168, 75, 0.12);
-  border-color: rgba(200, 168, 75, 0.35);
+  background: linear-gradient(180deg, rgba(200, 168, 75, 0.2), rgba(200, 168, 75, 0.1));
+  border-color: rgba(200, 168, 75, 0.42);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 18px rgba(200, 168, 75, 0.14);
   color: var(--gold);
+}
+
+.msme-nav__item:focus-visible {
+  outline: 2px solid rgba(200, 168, 75, 0.55);
+  outline-offset: 2px;
 }
 
 .msme-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 32px 32px 64px;
+  transition: padding-right 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (min-width: 1280px) {
+  .msme-container--chat-open {
+    padding-right: 420px;
+  }
 }
 
 /* ─── Cards ─── */
@@ -198,8 +241,17 @@ body {
   .msme-simulator-summary { grid-template-columns: 1fr; }
   .msme-simulator-plan { grid-template-columns: 1fr; }
   .msme-container { padding: 16px; }
-  .msme-topbar { padding: 12px 16px; }
-  .msme-nav { width: 100%; }
+  .msme-topbar {
+    padding: 12px 16px;
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .msme-nav {
+    width: 100%;
+    border-radius: 18px;
+    justify-content: stretch;
+    margin-left: 0;
+  }
   .msme-nav__item { flex: 1; justify-content: center; }
   .msme-skeleton-grid { grid-template-columns: 1fr; }
   .msme-progress-copy { flex-direction: column; align-items: flex-start; }

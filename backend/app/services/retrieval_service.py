@@ -70,7 +70,7 @@ class RetrievalService:
         rules = self.storage.get_active_apriori_rules()
         return [
             {
-                "id": rule["rule_id"],
+                "id": rule["id"],
                 "collection": "rules",
                 "text": rule["explanation"],
                 "similarity": float(rule["confidence"]),
@@ -81,6 +81,7 @@ class RetrievalService:
                     "support": rule["support"],
                     "confidence": rule["confidence"],
                     "lift": rule["lift"],
+                    "record_count": rule.get("record_count", 0),
                 },
             }
             for rule in rules[:k]

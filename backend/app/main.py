@@ -7,6 +7,7 @@ from app.api.routes import borrower
 from app.api.classification_endpoint import router as classification_router
 from app.api.upload_endpoint import router as upload_router
 from app.api.agent_status_endpoint import router as agent_status_router
+from app.api.insights_endpoint import router as insights_router
 from app.api.scoring_endpoint import router as scoring_router
 from app.core.entity_graph import get_entity_graph_service
 from app.core.chroma_client import ensure_chroma_collections
@@ -64,6 +65,7 @@ app.include_router(borrower.router, prefix="/api/borrower", tags=["borrower"])
 app.include_router(classification_router)
 app.include_router(upload_router)
 app.include_router(agent_status_router)
+app.include_router(insights_router)
 app.include_router(scoring_router)
 
 @app.get("/health")

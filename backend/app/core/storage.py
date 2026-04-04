@@ -6,6 +6,7 @@ Keeps the route-facing API stable while supporting both SQLite and Postgres.
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any, Dict, List
 
 from sqlalchemy import func, select
@@ -29,6 +30,13 @@ from .persistence_models import (
     UploadedDocumentRecord,
 )
 from .settings import get_settings
+from ..services.apriori_constants import (
+    MOCK_REPAY_HIGH_SCORE_PROBABILITY,
+    MOCK_REPAY_HIGH_SCORE_THRESHOLD,
+    MOCK_REPAY_LOW_SCORE_PROBABILITY,
+    MOCK_REPAY_MID_SCORE_PROBABILITY,
+    MOCK_REPAY_MID_SCORE_THRESHOLD,
+)
 
 _UNSET = object()
 
@@ -665,6 +673,52 @@ class ScoreStorage:
             ).first()
         return row.model_version if row else None
 
+    def list_latest_assessments(self) -> List[Dict[str, Any]]:
+        with session_scope() as session:
+            rows = session.execute(
+                select(
+                    ScoreAssessmentRecord.gstin,
+                    ScoreAssessmentRecord.company_name,
+                    ScoreAssessmentRecord.credit_score,
+                    ScoreAssessmentRecord.risk_band,
+                    ScoreAssessmentRecord.fraud_risk,
+                    ScoreAssessmentRecord.model_version,
+                    ScoreAssessmentRecord.industry_code,
+                    ScoreAssessmentRecord.months_active,
+                    ScoreAssessmentRecord.scenario,
+                    ScoreAssessmentRecord.data_sparse,
+                    ScoreAssessmentRecord.freshness_timestamp,
+                    ScoreAssessmentRecord.created_at,
+                    ScoreAssessmentRecord.top_reasons_json,
+                    ScoreAssessmentRecord.recommendation_json,
+                    ScoreAssessmentRecord.narrative,
+                )
+                .order_by(ScoreAssessmentRecord.created_at.desc())
+            ).all()
+
+        latest_by_gstin: dict[str, Dict[str, Any]] = {}
+        for row in rows:
+            if row.gstin in latest_by_gstin:
+                continue
+            latest_by_gstin[row.gstin] = {
+                "gstin": row.gstin,
+                "company_name": row.company_name,
+                "credit_score": row.credit_score,
+                "risk_band": row.risk_band,
+                "fraud_risk": row.fraud_risk,
+                "model_version": row.model_version,
+                "industry_code": row.industry_code,
+                "months_active": row.months_active,
+                "scenario": row.scenario,
+                "data_sparse": row.data_sparse,
+                "freshness_timestamp": row.freshness_timestamp,
+                "created_at": row.created_at,
+                "top_reasons": json.loads(row.top_reasons_json),
+                "recommendation": json.loads(row.recommendation_json),
+                "narrative": row.narrative,
+            }
+        return list(latest_by_gstin.values())
+
     def record_analyst_review(self, audit_entry: Dict[str, Any]) -> None:
         with session_scope() as session:
             session.add(
@@ -728,6 +782,11 @@ class ScoreStorage:
             count = session.scalar(select(func.count()).select_from(LoanOutcomeRecord))
         return int(count or 0)
 
+    def count_distinct_outcome_labeled_gstins(self) -> int:
+        with session_scope() as session:
+            count = session.scalar(select(func.count(func.distinct(LoanOutcomeRecord.gstin))))
+        return int(count or 0)
+
     def get_loan_outcomes(self) -> List[Dict[str, Any]]:
         with session_scope() as session:
             rows = session.execute(
@@ -755,6 +814,82 @@ class ScoreStorage:
             }
             for row in rows
         ]
+
+    def ensure_mock_loan_outcomes_for_latest_assessments(self) -> Dict[str, Any]:
+        latest_assessments = self.list_latest_assessments()
+        existing_by_gstin = {
+            outcome["gstin"]: outcome
+            for outcome in self.get_loan_outcomes()
+        }
+
+        seeded = 0
+        for assessment in latest_assessments:
+            gstin = assessment["gstin"]
+            if gstin in existing_by_gstin:
+                continue
+
+            credit_score = float(assessment.get("credit_score") or 0.0)
+            if credit_score > MOCK_REPAY_HIGH_SCORE_THRESHOLD:
+                repay_probability = MOCK_REPAY_HIGH_SCORE_PROBABILITY
+            elif credit_score >= MOCK_REPAY_MID_SCORE_THRESHOLD:
+                repay_probability = MOCK_REPAY_MID_SCORE_PROBABILITY
+            else:
+                repay_probability = MOCK_REPAY_LOW_SCORE_PROBABILITY
+
+            digest = hashlib.sha1(
+                f"{gstin}:{assessment.get('created_at')}:{credit_score}".encode("utf-8")
+            ).hexdigest()
+            noise_bucket = int(digest[:8], 16) / 0xFFFFFFFF
+            repaid = noise_bucket <= repay_probability
+
+            self.record_loan_outcome(
+                gstin=gstin,
+                company_name=assessment.get("company_name"),
+                repaid=repaid,
+                loan_amount=float(assessment.get("recommendation", {}).get("recommended_amount") or 250000),
+                tenure_months=int(assessment.get("recommendation", {}).get("recommended_tenure_months") or 24),
+                recorded_at=assessment.get("created_at"),
+                source_model_version=assessment.get("model_version"),
+                feature_snapshot={},
+            )
+            seeded += 1
+
+        return {
+            "seeded": seeded,
+            "total_outcomes": self.count_loan_outcomes(),
+        }
+
+    def get_rule_mining_records(self) -> List[Dict[str, Any]]:
+        latest_assessments = {
+            assessment["gstin"]: assessment
+            for assessment in self.list_latest_assessments()
+        }
+        fraud_alerts = {
+            gstin: self.get_latest_fraud_alert(gstin)
+            for gstin in latest_assessments
+        }
+        records: List[Dict[str, Any]] = []
+        for outcome in self.get_loan_outcomes():
+            assessment = latest_assessments.get(outcome["gstin"])
+            if assessment is None:
+                continue
+            pipeline_data = self.get_pipeline_data(outcome["gstin"])
+            feature_snapshot = outcome.get("feature_snapshot") or {}
+            records.append(
+                {
+                    "gstin": outcome["gstin"],
+                    "company_name": assessment.get("company_name"),
+                    "credit_score": assessment.get("credit_score"),
+                    "risk_band": assessment.get("risk_band"),
+                    "industry_code": assessment.get("industry_code"),
+                    "months_active": assessment.get("months_active"),
+                    "feature_snapshot": feature_snapshot,
+                    "fraud_detection": fraud_alerts.get(outcome["gstin"]) or {},
+                    "pipeline_data": pipeline_data or {},
+                    "outcome": "repaid" if outcome.get("repaid") else "defaulted",
+                }
+            )
+        return records
 
     def get_latest_loan_outcomes_by_gstins(self, gstins: List[str]) -> Dict[str, Dict[str, Any]]:
         normalized = [gstin for gstin in gstins if gstin]
@@ -915,20 +1050,22 @@ class ScoreStorage:
             for rule in rules:
                 existing = session.execute(
                     select(AprioriRuleRecord)
-                    .where(AprioriRuleRecord.id == rule["rule_id"])
+                    .where(AprioriRuleRecord.id == rule["id"])
                     .limit(1)
                 ).scalar_one_or_none()
                 if existing is None:
                     session.add(
                         AprioriRuleRecord(
-                            id=rule["rule_id"],
+                            id=rule["id"],
                             antecedents_json=json.dumps(rule["antecedents"]),
                             consequent=rule["consequent"],
                             support=rule["support"],
                             confidence=rule["confidence"],
                             lift=rule["lift"],
+                            record_count=rule["record_count"],
                             explanation=rule["explanation"],
                             created_at=created_at,
+                            generated_at=rule["generated_at"],
                             is_active=True,
                         )
                     )
@@ -938,8 +1075,10 @@ class ScoreStorage:
                     existing.support = rule["support"]
                     existing.confidence = rule["confidence"]
                     existing.lift = rule["lift"]
+                    existing.record_count = rule["record_count"]
                     existing.explanation = rule["explanation"]
                     existing.created_at = created_at
+                    existing.generated_at = rule["generated_at"]
                     existing.is_active = True
 
     def get_active_apriori_rules(self) -> List[Dict[str, Any]]:
@@ -952,26 +1091,30 @@ class ScoreStorage:
                     AprioriRuleRecord.support,
                     AprioriRuleRecord.confidence,
                     AprioriRuleRecord.lift,
+                    AprioriRuleRecord.record_count,
                     AprioriRuleRecord.explanation,
                     AprioriRuleRecord.created_at,
+                    AprioriRuleRecord.generated_at,
                 )
                 .where(AprioriRuleRecord.is_active.is_(True))
                 .order_by(
-                    AprioriRuleRecord.confidence.desc(),
                     AprioriRuleRecord.lift.desc(),
+                    AprioriRuleRecord.confidence.desc(),
                     AprioriRuleRecord.support.desc(),
                 )
             ).all()
         return [
             {
-                "rule_id": row.id,
+                "id": row.id,
                 "antecedents": json.loads(row.antecedents_json),
                 "consequent": row.consequent,
                 "support": row.support,
                 "confidence": row.confidence,
                 "lift": row.lift,
+                "record_count": row.record_count,
                 "explanation": row.explanation,
                 "created_at": row.created_at,
+                "generated_at": row.generated_at,
             }
             for row in rows
         ]

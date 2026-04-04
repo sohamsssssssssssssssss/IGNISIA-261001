@@ -30,6 +30,11 @@ class ScoreAssessmentRecord(Base):
     top_reasons_json: Mapped[str] = mapped_column(Text)
     recommendation_json: Mapped[str] = mapped_column(Text)
     narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
+    concept_scores_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    shap_top_factors_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
+    swot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triangulation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class FraudAlertRecord(Base):
@@ -216,6 +221,8 @@ class AprioriRuleRecord(Base):
     support: Mapped[float] = mapped_column(Float, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
     lift: Mapped[float] = mapped_column(Float, nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(String(64), index=True)
+    generated_at: Mapped[str] = mapped_column(String(64), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)

@@ -413,6 +413,32 @@ def _score_assessment_payload(
     data_sources = _build_data_sources(pipeline_data)
     data_freshness = _build_data_freshness(pipeline_data)
     missing_streams = _derive_missing_streams(pipeline_data)
+    historical_patterns: list[dict[str, Any]] = []
+
+    try:
+        inferred_outcome = "repaid" if score_result["recommendation"].get("eligible") else "defaulted"
+        feature_items = get_apriori_service().discretize_features(
+            {
+                "credit_score": score_result["credit_score"],
+                "fraud_detection": fraud_result,
+                "fraud_risk": fraud_result.get("circular_risk"),
+                "months_active": features.get("history_months_active", 0.0),
+                "outcome": inferred_outcome,
+                "pipeline_data": pipeline_data,
+                "risk_band": score_result["risk_band"]["band"],
+            }
+        )
+        historical_patterns = [
+            {
+                "explanation": rule["explanation"],
+                "confidence": rule["confidence"],
+                "lift": rule["lift"],
+                "record_count": rule["record_count"],
+            }
+            for rule in get_apriori_service().get_matching_rules(feature_items, inferred_outcome, top_n=2)
+        ]
+    except Exception:
+        logger.exception("Historical pattern lookup failed for GSTIN %s", normalized_gstin)
 
     payload = {
         "gstin": normalized_gstin,
@@ -485,6 +511,7 @@ def _score_assessment_payload(
         "scenario": scenario,
         "data_sparse": data_sparse,
         "sparse_data": data_sparse,
+        "historical_patterns": historical_patterns,
         "missing_streams": missing_streams,
         "audit_trail": audit_trail.to_list(),
     }
@@ -727,24 +754,6 @@ async def chat_endpoint(
     }
 
 
-@router.get(
-    "/insights/rules",
-    summary="Return mined Apriori lending rules",
-)
-@router.get(
-    "/v1/insights/rules",
-    summary="Return mined Apriori lending rules (v1)",
-)
-async def get_mined_rules(
-    force_refresh: bool = Query(False, description="Force recomputation instead of using the 1-hour cache"),
-    _: Any = Depends(require_role("viewer")),
-) -> Dict[str, Any]:
-    service = get_apriori_service()
-    rules = service.get_rules(force_refresh=force_refresh or service.rules_are_stale())
-    return {
-        "rules": rules,
-        "cache": service.get_cache_metadata(),
-    }
 @router.get(
     "/score/{gstin}/history",
     summary="Fetch score history for a GSTIN",

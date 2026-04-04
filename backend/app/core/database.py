@@ -8,7 +8,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
@@ -17,6 +17,39 @@ from .settings import get_settings
 
 class Base(DeclarativeBase):
     """Base declarative model class for persistence entities."""
+
+
+SQLITE_COMPATIBILITY_COLUMNS = {
+    "score_assessments": {
+        "industry_code": "VARCHAR(32)",
+        "months_active": "FLOAT NOT NULL DEFAULT 0",
+        "narrative": "TEXT",
+        "concept_scores_json": "TEXT",
+        "shap_top_factors_json": "TEXT",
+        "llm_narrative": "TEXT",
+        "swot_json": "TEXT",
+        "triangulation_json": "TEXT",
+    },
+    "document_sessions": {
+        "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+        "last_error": "TEXT",
+        "cam_filename": "VARCHAR(255)",
+        "cam_file_path": "TEXT",
+    },
+    "pipeline_runs": {
+        "result_json": "TEXT NOT NULL DEFAULT '{}'",
+        "chunks_indexed": "INTEGER NOT NULL DEFAULT 0",
+        "cam_filename": "VARCHAR(255)",
+        "cam_file_path": "TEXT",
+    },
+    "pipeline_run_events": {
+        "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+    },
+    "apriori_rules": {
+        "record_count": "INTEGER NOT NULL DEFAULT 0",
+        "generated_at": "VARCHAR(64)",
+    },
+}
 
 
 def _build_engine(database_url: str) -> Engine:
@@ -48,6 +81,49 @@ def get_session_factory() -> sessionmaker[Session]:
             class_=Session,
         )
     return _session_factory
+
+
+def _ensure_sqlite_backward_compatible_columns(engine: Engine) -> None:
+    """
+    Older local/demo SQLite files may predate newer persistence columns.
+    `create_all()` will create missing tables, but it will not add missing
+    columns to existing tables, so we heal those columns in place here.
+    """
+    if engine.dialect.name != "sqlite":
+        return
+
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+
+    with engine.begin() as connection:
+        for table_name, columns in SQLITE_COMPATIBILITY_COLUMNS.items():
+            if table_name not in existing_tables:
+                continue
+
+            existing_columns = {
+                column["name"]
+                for column in inspector.get_columns(table_name)
+            }
+
+            for column_name, column_sql in columns.items():
+                if column_name in existing_columns:
+                    continue
+                connection.execute(
+                    text(f'ALTER TABLE "{table_name}" ADD COLUMN "{column_name}" {column_sql}')
+                )
+
+        if "apriori_rules" in existing_tables:
+            apriori_columns = {
+                column["name"]
+                for column in inspect(engine).get_columns("apriori_rules")
+            }
+            if "generated_at" in apriori_columns and "created_at" in apriori_columns:
+                connection.execute(
+                    text(
+                        "UPDATE apriori_rules "
+                        "SET generated_at = COALESCE(generated_at, created_at)"
+                    )
+                )
 
 
 @contextmanager
@@ -101,7 +177,9 @@ def init_database() -> None:
         LoanOutcomeRecord,
         ModelVersionRecord,
     )
-    Base.metadata.create_all(bind=get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    _ensure_sqlite_backward_compatible_columns(engine)
 
 
 def reset_database_runtime() -> None:

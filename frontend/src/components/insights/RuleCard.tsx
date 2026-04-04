@@ -76,6 +76,7 @@ export default function RuleCard({
   confidence,
   lift,
   explanation,
+  record_count,
 }: RuleCardProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -123,6 +124,12 @@ export default function RuleCard({
           tooltip={`This pattern predicts the outcome ${lift.toFixed(1)}× better than random chance`}
         />
       </div>
+
+      {typeof record_count === 'number' && record_count > 0 ? (
+        <div className="insights-rule-card__section-title" style={{ marginTop: 0 }}>
+          Based on {record_count} similar cases
+        </div>
+      ) : null}
 
       <button
         type="button"

@@ -23,6 +23,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from .entity_graph import get_entity_graph_service
 from .settings import get_settings
 from .storage import get_storage
+from ..services.apriori_service import get_apriori_service
+from ..services.apriori_constants import APRIORI_SCHEDULER_INTERVAL_SECONDS
 from ..services.mock_pipelines import (
     generate_eway_bill_volume,
     generate_gst_velocity,
@@ -227,6 +229,18 @@ def refresh_pipeline_stream(
     return canonical
 
 
+def refresh_behavioral_patterns() -> None:
+    try:
+        get_apriori_service().run_refresh_job()
+        logger.info("Behavioral pattern mining refresh completed")
+    except Exception:
+        logger.exception("Behavioral pattern mining refresh failed")
+
+
+def trigger_apriori_refresh_now() -> None:
+    refresh_behavioral_patterns()
+
+
 def start_scheduler() -> None:
     """Start the three background pipeline workers on the configured interval."""
     global _scheduler
@@ -244,11 +258,18 @@ def start_scheduler() -> None:
     _scheduler.add_job(ingest_gst_velocity, "interval", seconds=interval, id="gst_velocity_worker")
     _scheduler.add_job(ingest_upi_cadence, "interval", seconds=interval, id="upi_cadence_worker")
     _scheduler.add_job(ingest_eway_bills, "interval", seconds=interval, id="eway_bill_worker")
+    _scheduler.add_job(
+        refresh_behavioral_patterns,
+        "interval",
+        seconds=APRIORI_SCHEDULER_INTERVAL_SECONDS,
+        id="behavioral_pattern_worker",
+    )
     _scheduler.start()
     # Demo bootstrap: preload monitored GSTINs so scoring and fraud graph are warm
     ingest_gst_velocity()
     ingest_upi_cadence()
     ingest_eway_bills()
+    refresh_behavioral_patterns()
     logger.info("Pipeline scheduler started — 3 workers at %ds interval", interval)
 
 

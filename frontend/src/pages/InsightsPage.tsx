@@ -671,40 +671,50 @@ function parseInsightsPayload(raw: unknown): ParsedInsightsPayload {
   const payload = raw as Record<string, unknown>;
   const rules = (Array.isArray(payload.rules) ? payload.rules : Array.isArray(payload.items) ? payload.items : [])
     .filter(isAssociationRule);
+  const metadata = typeof payload.metadata === 'object' && payload.metadata !== null
+    ? payload.metadata as Record<string, unknown>
+    : null;
 
-  const assessmentCount = typeof payload.assessmentCount === 'number'
-    ? payload.assessmentCount
-    : typeof payload.assessment_count === 'number'
-      ? payload.assessment_count
-      : typeof payload.currentAssessments === 'number'
-        ? payload.currentAssessments
-        : typeof payload.current_assessments === 'number'
-          ? payload.current_assessments
-          : 0;
+  const assessmentCount = typeof metadata?.assessment_count === 'number'
+    ? metadata.assessment_count
+    : typeof payload.assessmentCount === 'number'
+      ? payload.assessmentCount
+      : typeof payload.assessment_count === 'number'
+        ? payload.assessment_count
+        : typeof payload.currentAssessments === 'number'
+          ? payload.currentAssessments
+          : typeof payload.current_assessments === 'number'
+            ? payload.current_assessments
+            : 0;
 
-  const requiredAssessments = typeof payload.requiredAssessments === 'number'
-    ? payload.requiredAssessments
-    : typeof payload.required_assessments === 'number'
-      ? payload.required_assessments
-      : typeof payload.minimumAssessments === 'number'
-        ? payload.minimumAssessments
-        : typeof payload.minimum_assessments === 'number'
-          ? payload.minimum_assessments
-          : 50;
+  const requiredAssessments = typeof metadata?.required_assessments === 'number'
+    ? metadata.required_assessments
+    : typeof payload.requiredAssessments === 'number'
+      ? payload.requiredAssessments
+      : typeof payload.required_assessments === 'number'
+        ? payload.required_assessments
+        : typeof payload.minimumAssessments === 'number'
+          ? payload.minimumAssessments
+          : typeof payload.minimum_assessments === 'number'
+            ? payload.minimum_assessments
+            : 50;
 
-  const lastUpdated = typeof payload.lastUpdated === 'string'
-    ? payload.lastUpdated
-    : typeof payload.last_updated === 'string'
-      ? payload.last_updated
-      : typeof payload.generatedAt === 'string'
-        ? payload.generatedAt
-        : typeof payload.generated_at === 'string'
-          ? payload.generated_at
-          : rules.length > 0
-            ? new Date().toISOString()
-            : null;
+  const lastUpdated = typeof metadata?.last_updated === 'string'
+    ? metadata.last_updated
+    : typeof payload.lastUpdated === 'string'
+      ? payload.lastUpdated
+      : typeof payload.last_updated === 'string'
+        ? payload.last_updated
+        : typeof payload.generatedAt === 'string'
+          ? payload.generatedAt
+          : typeof payload.generated_at === 'string'
+            ? payload.generated_at
+            : rules.length > 0
+              ? new Date().toISOString()
+              : null;
 
-  const notEnoughData = payload.notEnoughData === true
+  const notEnoughData = metadata?.not_enough_data === true
+    || payload.notEnoughData === true
     || payload.not_enough_data === true
     || (rules.length === 0 && assessmentCount < requiredAssessments);
 
